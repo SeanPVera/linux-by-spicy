@@ -73,6 +73,7 @@ This runs `live-build` in a privileged, disposable container because image
 assembly requires filesystem mounts. It produces
 `distro/dist/spicy-linux-0.1-alpha-amd64.iso` and its SHA-256 checksum.
 The live session uses the account `spicy` and automatically signs in.
+Its password is `live` if you lock the screen or sign out.
 The image includes no installer; do not copy its live-session automatic-login
 configuration into an installed system.
 

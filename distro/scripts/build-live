@@ -19,6 +19,7 @@ docker run --rm --privileged \
         # markers referring to a different cached root filesystem. Download
         # and bootstrap caches are retained by the default clean operation.
         lb clean
+        python3 /src/distro/tools/prepare-boot.py "$work/config/spicy-menu.png"
         lb bootstrap
         # debootstrap temporarily diverts os-release. live-build normally
         # removes this in chroot_hacks, after local packages are configured;

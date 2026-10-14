@@ -1,6 +1,8 @@
 live-boot
 live-config
 live-config-systemd
+user-setup
+sudo
 systemd-sysv
 dbus-user-session
 plasma-desktop

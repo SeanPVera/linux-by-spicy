@@ -6,6 +6,8 @@ lb config noauto \
     --distribution trixie \
     --architectures amd64 \
     --binary-images iso-hybrid \
+    --chroot-squashfs-compression-type zstd \
+    --chroot-squashfs-compression-level 9 \
     --archive-areas "main non-free-firmware" \
     --bootloaders "syslinux grub-efi" \
     --uefi-secure-boot enable \

@@ -2,8 +2,38 @@
 # SPDX-License-Identifier: GPL-2.0-only
 set -eu
 work=/tmp/spicy-live-config
-mkdir -p "$work"
-cp -a /src/distro/live/auto /src/distro/live/config "$work/"
+sh /src/distro/tools/stage-live-config "$work"
 cd "$work"
 lb config
 lb config --validate
+
+# Reproduce Debian live-build's tar overlay behavior with private source modes.
+# An existing system directory must remain traversable by service accounts.
+fixture="$(mktemp -d /tmp/spicy-overlay.XXXXXX)"
+trap 'rm -rf "$fixture"' EXIT
+chmod 0755 "$fixture"
+cp -a /src/distro/live "$fixture/private-profile"
+find "$fixture/private-profile" -type d -exec chmod 0700 {} +
+find "$fixture/private-profile" -type f -exec chmod 0600 {} +
+sh /src/distro/tools/stage-live-config "$fixture/staged" "$fixture/private-profile"
+install -d -m 0755 "$fixture/chroot/etc/dbus-1"
+printf '%s\n' '<busconfig/>' > "$fixture/chroot/etc/dbus-1/system.conf"
+chmod 0644 "$fixture/chroot/etc/dbus-1/system.conf"
+tar cf "$fixture/overlay.tar" -C "$fixture/private-profile/config/includes.chroot" .
+tar -xf "$fixture/overlay.tar" --no-same-owner --keep-directory-symlink --overwrite -C "$fixture/chroot"
+[ "$(stat -c %a "$fixture/chroot/etc")" = 700 ]
+if runuser -u nobody -- test -r "$fixture/chroot/etc/dbus-1/system.conf"; then
+    echo 'Private overlay fixture did not reproduce the service access failure.' >&2
+    exit 1
+fi
+tar cf "$fixture/overlay.tar" -C "$fixture/staged/config/includes.chroot" .
+tar -xf "$fixture/overlay.tar" --no-same-owner --keep-directory-symlink --overwrite -C "$fixture/chroot"
+[ "$(stat -c %a "$fixture/chroot/etc")" = 755 ]
+runuser -u nobody -- test -r "$fixture/chroot/etc/dbus-1/system.conf"
+runuser -u nobody -- test -r "$fixture/chroot/etc/sddm.conf.d/20-spicy.conf"
+cmp "$fixture/private-profile/config/includes.chroot/etc/sddm.conf.d/20-spicy.conf" "$fixture/chroot/etc/sddm.conf.d/20-spicy.conf"
+[ "$(stat -c %a "$fixture/private-profile/config/includes.chroot/etc")" = 700 ]
+[ -x "$fixture/staged/auto/config" ]
+[ -x "$fixture/staged/config/hooks/live/0200-spicy.hook.chroot" ]
+[ -x "$fixture/staged/config/hooks/live/0100-spicy.hook.binary" ]
+printf '%s\n' 'Live overlay: service access, readable defaults and executable hooks preserved from private source modes.'

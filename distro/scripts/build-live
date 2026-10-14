@@ -9,8 +9,7 @@ docker run --rm --privileged \
     -e SPICY_OWNER_UID="$(id -u)" -e SPICY_OWNER_GID="$(id -g)" \
     spicy-builder:alpha sh -eu -c '
         work=/src/distro/build/live
-        mkdir -p "$work"
-        cp -a /src/distro/live/auto /src/distro/live/config "$work/"
+        sh /src/distro/tools/stage-live-config "$work"
         mkdir -p "$work/config/packages.chroot"
         cp /src/distro/dist/*.deb "$work/config/packages.chroot/"
         cd "$work"

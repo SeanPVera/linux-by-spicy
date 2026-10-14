@@ -56,6 +56,16 @@ restore cannot reintroduce the temporary release-identity diversion. Disposable
 package checks also verify that foreign diversions remain intact on a refused
 installation and removal.
 
+A full-image boot exposed another build-specific blocker: live-build preserved
+private checkout directory permissions from the `/etc` overlay, leaving `/etc`
+at `0700`. The serial diagnostic boot showed repeated system D-Bus startup
+failures; the graphical boot reached SDDM but could not complete a desktop
+session. The build now normalizes copied profile directories and readable
+defaults, preserving executable hooks and leaving source permissions intact.
+The live-config check reproduces Debian's tar overlay with a deliberately
+private source tree, verifies that service-user access fails before staging,
+and verifies access and unchanged default contents after normalization.
+
 ## Live-image observations
 
 The Debian 13 amd64 image was booted with OVMF UEFI firmware in QEMU using

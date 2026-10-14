@@ -5,10 +5,13 @@
 - Five asset checks cover the compiled cursor sizes and click hotspots,
   disconnected tip/paw silhouettes, wallpaper exports, text contrast and
   the approved art selections.
-- Nineteen additional behavior checks cover stalled appearance subprocesses,
+- Twenty-four additional behavior checks cover stalled appearance subprocesses,
   Qt process failure/retry handling, and evidence collection with missing tools,
-  checksum failures, private-field filtering and firmware access failures.
-  The combined automated suite contains 24 passing tests.
+  checksum failures, private-field filtering, firmware access failures and the
+  distinction between collector and KWin process environments. Twelve VM
+  launcher checks cover independent CPU/graphics choices, blocked prerequisites,
+  bounded probes, retained launch metadata and evidence preservation.
+  The combined automated suite contains 41 passing tests.
 - Real Qt renders exercise 80 welcome layouts and 40 sign-in layouts across
   ten physical resolutions, from 1024×768 through 3840×2160, at 100%, 125%,
   150% and 200% scaling. The actual Atkinson Hyperlegible font is loaded.
@@ -103,7 +106,9 @@ diagnostic commands.
 The guest collector ran as the desktop user through the existing user service
 manager and was exported before shutdown (`guest-observations.json`). It reports
 Plasma 6 / KWin 6.3.6 on Wayland, OpenGL composition with Mesa 25.0.7 llvmpipe
-(LLVM 19.1.7), and no renderer overrides. KScreen confirms 1920×1080 at 105%
+(LLVM 19.1.7), and an empty collector-process renderer-overrides map. That
+collector did not inspect KWin's environment; the empty map cannot establish
+that KWin had no overrides. KScreen confirms 1920×1080 at 105%
 scaling, rather than an assumed 100%. The report retains tester-supplied ISO
 provenance; the launcher's separately computed digest identifies the booted
 medium. EFI boot was observed, but Secure Boot variables were unavailable and
@@ -123,6 +128,85 @@ appearance request. This run does not establish successful theme switching,
 reduced motion, lock/unlock or sustained everyday use for the rebuilt image.
 Compare the same digest on the accelerated profile before attributing these
 failures to a graphics driver or changing the default renderer.
+
+## Host inspection and software follow-up
+
+The next workspace also exposes neither `/dev/kvm` nor `/dev/dri`. The new
+`run-vm inspect` records device type/access and bounded QEMU capability probes.
+It reports blocked prerequisites or unverified candidates, never an automatic
+graphics pass. CPU acceleration and graphics can now be selected independently
+for KVM/software and TCG/VirGL diagnostic controls, while the original profiles
+retain their defaults and never fall back silently.
+
+Inspection also found that the builder's minimal QEMU installation lacked GTK
+and OpenGL modules. Adding Debian's `qemu-system-gui` makes QEMU 10.0.13 advertise
+GTK, EGL and `virtio-vga-gl`. These listings do not initialize acceleration.
+The accelerated launch still exits 1 before starting QEMU because the host's
+KVM and render devices are absent. No accelerated result is certified.
+
+Generated artifacts were unavailable and were rebuilt from
+`c45155426d2285ac39f92ea5ef93cb924a7c9b53` on 2026-10-14 UTC. The new ISO is
+1,869,873,152 bytes, with SHA-256
+`240830a1a6efafe71e649879f626661ff6bed703abade88166a1ab145f8855cf`.
+The [reviewed campaign summary](validation/2026-10-14-software-vm.json) retains
+the declared VM profile, observations, operation timings, acceptance statuses
+and hashes of local evidence. Full reports and captures remain ignored build
+artifacts under `distro/build/vm/`; private journals are not committed.
+
+Both software boots used the same digest, q35/TCG, two virtual CPUs, 4 GiB RAM,
+virtio-vga requesting 1920×1080, a headless display, fresh OVMF variables and no
+network or hard disk. A read-only diagnostics CD and local USB serial command
+channel were attached later; these are recorded separately from the original
+launcher configuration. Neither changes the distribution ISO.
+
+The first run included early VT switches during the SDDM-to-KWin handoff. SDDM
+authenticated automatically, then its helper exited with 64. In the installed
+SDDM source revision `4fe234b`, VT release uses Linux `SIGRTMAX` (64), and the
+helper forwards the child's code without retaining its normal/crash distinction.
+This fits an interrupted startup; it does not prove a new image login regression.
+The first run rendered the approved 7A boot and 7C sign-in artwork. Its startup
+result remains inconclusive, and the workflow now cautions against early VT
+changes.
+
+The repeat run received no guest input for its first 203 seconds. It rendered
+the approved Plymouth portrait and growing continuous progress bar, authenticated
+automatically and kept the Plasma Wayland session alive on VT 2. Guest collection
+confirms KWin 6.3.6, Qt 6.8.2, Mesa 25.0.7 / llvmpipe (LLVM 19.1.7, 256 bits),
+and the actual 1920×1080 mode at 105% scaling. KWin's initial environment was
+unreadable to the collector and remains unknown; it is no longer inferred from
+the collector's empty renderer-overrides map.
+
+Rendering is still not stable. Initial captures stayed black; a complete Daylight
+desktop/Welcome frame appeared after later VT activation, followed by a Welcome
+"Not Responding" frame. The user journal records repeated KWin main-thread hang
+warnings and an output-configuration failure. A later capture explicitly reports
+an inactive display output; that power-saving observation is not counted as a
+blank-redraw failure. The host execution transport disconnected once during
+the campaign; the VM and files survived, and no host OOM kill was observed.
+These interventions and unreliable input limit the interactive conclusions.
+
+| Diagnostic operation | Observed result | Acceptance limit |
+| --- | --- | --- |
+| Night Prowl | Exit 0 after 18.109 s; saved `night-prowl` preference observed | Complete visual refresh and 30-minute use unverified |
+| Reduced motion on | Exit 0 after 1.753 s; `ReducedMotion=true` and `AnimationDurationFactor=0` observed | Visible animation and control responsiveness unverified |
+| Dolphin, Kate, Firefox ESR | All three launch requests returned 0 | Dialogs, scrolling, video and GTK interoperability unverified |
+| Return to Daylight | Exit 1 after 11.096 s; `plasma-apply-lookandfeel` exceeded its 8 s limit; saved preference stayed Night Prowl | Both-theme switching/persistence gate failed; sign-out persistence untested |
+| 1080p at 100% | Request skipped after the display probe could not obtain one usable active output | Actual scale remained 105%; no 100% pass |
+| 720p at 100% | Request skipped because 1280×720 was not advertised | This resolution is blocked in this VM profile |
+| Lock | An earlier active lock state was observed; the later lock request returned 0 | Later lock transition, sleeping 7B rendering and successful unlock unverified |
+
+The original collector matrix is preserved with its untested defaults. Separate
+reviewed copies confirm the launcher digest, pass only the exercised Plymouth
+portrait criterion, fail the observed Daylight responsiveness and return-switch
+criteria, and retain blocked or untested results elsewhere. Nine complete
+desktop scaling cases are blocked by the attempted 100% request or unavailable
+720p mode; 71 remain untested. None passed. Native Qt/Plymouth coverage through
+4K remains separate from complete-desktop acceptance.
+
+The software campaign did not complete sustained interactive use in both themes.
+Repeat this exact digest on a capable KVM/VirGL host, with a visible interactive
+display, before physical validation. The renderer defaults and approved artwork
+remain unchanged; a software-only stall does not justify a driver-support claim.
 
 ## Remaining release gates
 

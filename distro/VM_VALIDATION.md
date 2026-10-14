@@ -47,6 +47,11 @@ attaches no hard disk. The live account is `spicy`; its password is `live`.
 No installer is present. Exit the VM before starting a new run, and use a new
 output directory so earlier evidence stays intact. `--dry-run` prints the
 configuration without creating files or starting QEMU.
+Allow the graphical session to finish starting before switching virtual
+terminals for diagnostics. A VT change during the SDDM-to-KWin handoff can
+interrupt startup; record interventions and repeat an affected boot without
+them before attributing the result to the image. Capture-only QMP commands
+do not send guest keyboard input.
 Dry runs check paths and construct the requested command; they skip host
 capability checks and are not evidence that a configuration can boot.
 

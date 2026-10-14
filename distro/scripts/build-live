@@ -15,6 +15,10 @@ docker run --rm --privileged \
         cp /src/distro/dist/*.deb "$work/config/packages.chroot/"
         cd "$work"
         lb config
+        # Rebuild stages together so an interrupted run cannot leave stage
+        # markers referring to a different cached root filesystem. Download
+        # and bootstrap caches are retained by the default clean operation.
+        lb clean
         lb bootstrap
         # debootstrap temporarily diverts os-release. live-build normally
         # removes this in chroot_hacks, after local packages are configured;

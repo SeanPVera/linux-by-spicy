@@ -52,6 +52,7 @@ jobs:
           docker run --rm --mount "type=bind,src=$PWD,dst=/src" \
             spicy-builder:alpha sh distro/tools/check-release
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: spicy-desktop-alpha
           path: |

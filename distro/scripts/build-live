@@ -21,7 +21,7 @@ docker run --rm --privileged \
         lb clean
         python3 /src/distro/tools/prepare-boot.py "$work/config/spicy-menu.png"
         lb bootstrap
-        # debootstrap temporarily diverts os-release. live-build normally
+        # live-build temporarily diverts os-release during bootstrap. It normally
         # removes this in chroot_hacks, after local packages are configured;
         # release identity packages need the normal path before that stage.
         if [ "$(chroot chroot dpkg-divert --listpackage /etc/os-release)" = LOCAL ] &&
@@ -31,7 +31,13 @@ docker run --rm --privileged \
                 mv -f chroot/etc/os-release.debootstrap chroot/etc/os-release
             fi
         fi
-        lb build
+        # Continue with the remaining lb build stages directly. Running lb
+        # build here repeats bootstrap_cache restore, replacing this rootfs
+        # with its cached copy and reintroducing the diversion just removed.
+        lb chroot
+        lb installer
+        lb binary
+        lb source
         cp live-image-amd64.hybrid.iso /src/distro/dist/spicy-linux-0.1-alpha-amd64.iso
         cd /src/distro/dist
         sha256sum spicy-linux-0.1-alpha-amd64.iso > spicy-linux-0.1-alpha-amd64.iso.sha256

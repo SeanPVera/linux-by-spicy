@@ -75,6 +75,7 @@ def render(source, width, height, scale, work):
                              f"{width}x{height}x24", "-nolisten", "tcp", "-dpi", "96"],
                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     daemon = None
+    failure = None
     try:
         assert select.select([xvfb.stdout], [], [], 10)[0], "Xvfb did not become ready"
         env["DISPLAY"] = ":" + xvfb.stdout.readline().strip()
@@ -102,6 +103,9 @@ def render(source, width, height, scale, work):
                 time.sleep(.1)
         frame.save(OUTPUT / (name + ".png"))
         return result
+    except Exception as error:
+        failure = str(error)
+        raise
     finally:
         if daemon is not None and daemon.poll() is None:
             try:
@@ -125,6 +129,12 @@ def render(source, width, height, scale, work):
             # Plymouth creates debug logs with root-only permissions; CI's
             # artifact uploader and the workspace user need to read them.
             log.chmod(0o644)
+            if failure is not None:
+                relevant = [line for line in log.read_text(errors="replace").splitlines()
+                            if re.search(r"renderer|display|theme|script|image|failed|error|fallback",
+                                         line, re.IGNORECASE)]
+                print(f"Plymouth {name} failed: {failure}", flush=True)
+                print("\n".join(relevant[-45:]), flush=True)
 
 
 def main():

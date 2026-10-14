@@ -5,6 +5,30 @@ set -eu
 [ -f /.dockerenv ] || { echo 'Use a disposable container for the release-package check.' >&2; exit 1; }
 original_link="$(readlink /etc/os-release)"
 original_content="$(cat /etc/os-release)"
+test_work="$(mktemp -d)"
+trap 'rm -rf "$test_work"' EXIT
+
+# A bootstrap cache can retain live-build's local diversion. The release
+# package must refuse it without changing ownership or the original identity;
+# the build owns removing its known diversion before installing packages.
+dpkg-divert --local --add --no-rename --divert /etc/os-release.debootstrap /etc/os-release
+if dpkg -i /src/distro/dist/spicy-release_0.1.0~alpha1_all.deb > "$test_work/rejected.log" 2>&1; then
+    echo 'Release identity must refuse an existing foreign diversion.' >&2
+    exit 1
+fi
+grep -q 'Another package already manages /etc/os-release through a diversion.' "$test_work/rejected.log"
+[ "$(dpkg-divert --listpackage /etc/os-release)" = LOCAL ]
+[ "$(dpkg-divert --truename /etc/os-release)" = /etc/os-release.debootstrap ]
+[ "$(readlink /etc/os-release)" = "$original_link" ]
+[ "$(cat /etc/os-release)" = "$original_content" ]
+dpkg --purge spicy-release
+[ "$(dpkg-divert --listpackage /etc/os-release)" = LOCAL ]
+[ "$(dpkg-divert --truename /etc/os-release)" = /etc/os-release.debootstrap ]
+[ "$(readlink /etc/os-release)" = "$original_link" ]
+[ "$(cat /etc/os-release)" = "$original_content" ]
+# Remove only this fixture; this is not a copy of the build's cleanup guard.
+dpkg-divert --local --remove --no-rename /etc/os-release
+
 dpkg -i /src/distro/dist/spicy-release_0.1.0~alpha1_all.deb
 [ "$(readlink /etc/os-release)" = /usr/lib/spicy/os-release ]
 grep -q '^ID=spicy$' /etc/os-release
@@ -13,4 +37,4 @@ grep -q '^ID=spicy$' /etc/os-release
 dpkg --purge spicy-release
 [ "$(readlink /etc/os-release)" = "$original_link" ]
 [ "$(cat /etc/os-release)" = "$original_content" ]
-printf '%s\n' 'Release identity: install, reinstall and removal restore Debian correctly.'
+printf '%s\n' 'Release identity: foreign diversions preserved; install, reinstall and removal restore Debian correctly.'

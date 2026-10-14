@@ -98,6 +98,8 @@ previews and JSON results go under `distro/build/previews/`.
 The Qt checks do not substitute for a boot test of the complete Plasma desktop.
 KWin composition is needed for blur; applications using other toolkits retain
 their own application styling. Reduced motion is available from the welcome app.
+The observed VM results and remaining release gates are recorded in
+[the validation notes](distro/VALIDATION.md).
 
 ## Art direction and licensing
 

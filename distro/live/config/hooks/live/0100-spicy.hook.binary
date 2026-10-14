@@ -14,6 +14,7 @@ for path in (Path("boot/grub/grub.cfg"), Path("isolinux/live.cfg")):
         text = path.read_text().replace("Live system (amd64 fail-safe mode)", "Spicy Linux (safe graphics)")
         text = text.replace("Live system (amd64)", "Try Spicy Linux")
         text = text.replace("boot=live components memtest", "boot=live components username=spicy hostname=spicy-linux locales=en_US.UTF-8 keyboard-layouts=us memtest")
+        text = text.replace("username=spicy hostname=", "username=spicy user-fullname=Spicy hostname=")
         path.write_text(text)
 
 config = Path("boot/grub/config.cfg")

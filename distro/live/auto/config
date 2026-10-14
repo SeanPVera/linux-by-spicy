@@ -21,5 +21,5 @@ lb config noauto \
     --iso-application "Spicy Linux Live Alpha" \
     --iso-publisher "Spicy Linux" \
     --iso-volume "SPICY_LIVE_ALPHA" \
-    --bootappend-live "boot=live components quiet splash username=spicy hostname=spicy-linux locales=en_US.UTF-8 keyboard-layouts=us" \
+    --bootappend-live "boot=live components quiet splash username=spicy user-fullname=Spicy hostname=spicy-linux locales=en_US.UTF-8 keyboard-layouts=us" \
     "$@"

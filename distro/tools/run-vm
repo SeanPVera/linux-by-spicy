@@ -11,6 +11,7 @@ import re
 import shlex
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -56,6 +57,121 @@ def drive_path(path):
     return str(path).replace(",", ",,")
 
 
+def device_evidence(path):
+    try:
+        info = path.stat()
+    except FileNotFoundError:
+        return {"path": str(path), "exists": False, "character_device": False,
+                "readable": False, "writable": False}
+    except OSError:
+        return {"path": str(path), "exists": None, "character_device": None,
+                "readable": False, "writable": False}
+    return {"path": str(path), "exists": True,
+            "character_device": stat.S_ISCHR(info.st_mode),
+            "readable": os.access(path, os.R_OK), "writable": os.access(path, os.W_OK)}
+
+
+def accessible_device(evidence):
+    return all(evidence[key] for key in ("exists", "character_device", "readable", "writable"))
+
+
+def help_probe(executable, arguments):
+    if not executable:
+        return {"status": "missing_command"}, None
+    try:
+        result = subprocess.run([executable, *arguments], text=True, capture_output=True,
+                                timeout=10, check=False)
+    except subprocess.TimeoutExpired:
+        return {"status": "timeout"}, None
+    except OSError:
+        return {"status": "unavailable"}, None
+    if result.returncode:
+        return {"status": "failed", "exit_code": result.returncode}, None
+    return {"status": "ok", "exit_code": 0}, result.stdout
+
+
+def host_capabilities(qemu, display, render_node):
+    """Read prerequisites and advertised QEMU support, without starting a VM."""
+    executable = shutil.which(qemu)
+    probes, outputs = {}, {}
+    for name, arguments in {"version": ["--version"], "accelerators": ["-accel", "help"],
+                            "devices": ["-device", "help"], "displays": ["-display", "help"]}.items():
+        probes[name], outputs[name] = help_probe(executable, arguments)
+    lists = {}
+    for name in ("accelerators", "displays"):
+        source = outputs[name]
+        lists[name] = ([line.strip() for line in source.splitlines()
+                        if re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", line.strip())]
+                       if source is not None else None)
+    lists["graphics_devices"] = ({name: bool(re.search(r'name "' + name + r'"', outputs["devices"]))
+                                 for name in ("virtio-vga", "virtio-vga-gl")}
+                                if outputs["devices"] is not None else None)
+    nodes = sorted(Path("/dev/dri").glob("renderD*"))
+    devices = {"kvm": device_evidence(Path("/dev/kvm")),
+               "render_nodes": [device_evidence(node) for node in nodes],
+               "selected_render_node": device_evidence(render_node)}
+    evidence = {
+        "inspected_utc": timestamp(), "display": display,
+        "qemu": {"requested": qemu, "executable": executable,
+                 "version": (outputs["version"].splitlines()[0] if outputs["version"] else None),
+                 "probes": probes, "advertised": lists},
+        "devices": devices,
+        "limits": "Access checks and QEMU help listings do not initialize KVM or EGL/GTK. "
+                  "Actual launch, host GL support, and the guest renderer remain unverified.",
+    }
+    evidence["combinations"] = {}
+    for accel in ("tcg", "kvm"):
+        for graphics in ("software", "virgl"):
+            blocked, unknown = prerequisites(evidence, accel, graphics)
+            evidence["combinations"][f"{accel}+{graphics}"] = {
+                "status": "blocked" if blocked else "unverified",
+                "blocked_reasons": blocked, "unknown_probes": unknown,
+            }
+    return evidence
+
+
+def prerequisites(evidence, accel, graphics):
+    blocked, unknown = [], []
+    advertised = evidence["qemu"]["advertised"]
+    if not evidence["qemu"]["executable"]:
+        blocked.append("QEMU executable is unavailable")
+    required = [("accelerators", accel),
+                ("graphics_devices", "virtio-vga-gl" if graphics == "virgl" else "virtio-vga")]
+    if evidence["display"] == "gtk":
+        required.append(("displays", "gtk"))
+    elif graphics == "virgl":
+        required.append(("displays", "egl-headless"))
+    for category, name in required:
+        if advertised[category] is None:
+            unknown.append(category)
+        elif (not advertised[category].get(name, False) if category == "graphics_devices"
+              else name not in advertised[category]):
+            blocked.append(f"QEMU does not advertise {name}")
+    if accel == "kvm" and not accessible_device(evidence["devices"]["kvm"]):
+        blocked.append("KVM requires a readable/writable /dev/kvm character device")
+    if graphics == "virgl":
+        if evidence["display"] == "headless":
+            selected = evidence["devices"]["selected_render_node"]
+            if not accessible_device(selected):
+                blocked.append(f"VirGL EGL requires a readable/writable render character device: {selected['path']}")
+        elif not any(accessible_device(node) for node in evidence["devices"]["render_nodes"]):
+            blocked.append("VirGL GTK requires a readable/writable /dev/dri/renderD* character device")
+    return blocked, unknown
+
+
+def inspect(args):
+    if args.output and args.output.exists():
+        raise ValueError(f"evidence already exists: {args.output}")
+    evidence = host_capabilities(args.qemu, args.display,
+                                 (args.render_node or Path("/dev/dri/renderD128")).resolve())
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        with args.output.open("x", encoding="utf-8") as stream:
+            stream.write(json.dumps(evidence, indent=2) + "\n")
+    print(json.dumps(evidence, indent=2))
+    return 0
+
+
 def launch(args):
     iso = args.iso.resolve()
     output = args.output.resolve()
@@ -70,29 +186,22 @@ def launch(args):
     if "," in str(qmp) or len(os.fsencode(qmp)) > 103:
         raise ValueError("output path must be short enough for a Unix socket and contain no comma")
 
-    accelerated = args.profile == "accelerated"
-    if args.render_node and (not accelerated or args.display != "headless"):
-        raise ValueError("--render-node is supported only by the accelerated headless (EGL) profile")
+    accel = args.accel or ("kvm" if args.profile == "accelerated" else "tcg")
+    graphics = args.graphics or ("virgl" if args.profile == "accelerated" else "software")
+    virgl = graphics == "virgl"
+    if args.render_node and (not virgl or args.display != "headless"):
+        raise ValueError("--render-node is supported only with VirGL and headless (EGL) display")
     render_node = (args.render_node or Path("/dev/dri/renderD128")).resolve()
-    if accelerated and not args.dry_run:
-        if not os.access("/dev/kvm", os.R_OK | os.W_OK):
-            raise ValueError("accelerated profile requires readable/writable /dev/kvm")
-        if args.display == "headless" and not os.access(render_node, os.R_OK | os.W_OK):
-            raise ValueError(f"accelerated profile requires a usable render node: {render_node}")
-        if args.display == "gtk" and not any(os.access(node, os.R_OK | os.W_OK)
-                                              for node in Path("/dev/dri").glob("renderD*")):
-            raise ValueError("accelerated GTK profile requires an accessible /dev/dri/renderD* node")
-
-    cpu = "host" if accelerated else "max"
-    gpu = "virtio-vga-gl" if accelerated else "virtio-vga"
+    cpu = "host" if accel == "kvm" else "max"
+    gpu = "virtio-vga-gl" if virgl else "virtio-vga"
     if args.display == "headless":
-        display = f"egl-headless,rendernode={drive_path(render_node)}" if accelerated else "none"
+        display = f"egl-headless,rendernode={drive_path(render_node)}" if virgl else "none"
     else:
-        display = "gtk,gl=on" if accelerated else "gtk,gl=off"
+        display = "gtk,gl=on" if virgl else "gtk,gl=off"
     width, height = args.resolution
     command = [
         args.qemu, "-name", "Spicy live validation", "-nodefaults",
-        "-machine", "q35", "-accel", "kvm" if accelerated else "tcg",
+        "-machine", "q35", "-accel", accel,
         "-cpu", cpu, "-smp", str(args.cpus), "-m", str(args.memory),
         "-drive", f"if=pflash,unit=0,format=raw,readonly=on,file={drive_path(firmware)}",
         "-drive", f"if=pflash,unit=1,format=raw,file={drive_path(output / 'OVMF_VARS.fd')}",
@@ -109,34 +218,35 @@ def launch(args):
         "cpu": f"{cpu}; {args.cpus} virtual CPUs",
         "firmware": firmware.name,
         "graphics": f"{gpu}; requested mode {width}x{height}" +
-                    (f"; EGL render node {render_node.name}" if accelerated and args.display == "headless"
-                     else "; GTK automatically selects the render node" if accelerated else ""),
+                    (f"; EGL render node {render_node.name}" if virgl and args.display == "headless"
+                     else "; GTK automatically selects the render node" if virgl else ""),
         "memory_mib": args.memory,
-        "acceleration": "KVM with VirGL" if accelerated else "TCG; guest software rendering",
+        "acceleration": f"{accel.upper()}; requested {'VirGL' if virgl else 'guest software rendering'}",
     }
     if args.dry_run:
         print(json.dumps({"command": command, "vm_profile": profile}, indent=2))
         return 0
 
-    executable = shutil.which(args.qemu)
-    if not executable:
-        raise ValueError(f"QEMU executable not found: {args.qemu}")
+    capabilities = host_capabilities(args.qemu, args.display, render_node)
+    blocked, _ = prerequisites(capabilities, accel, graphics)
+    if blocked:
+        raise ValueError("; ".join(blocked))
+    executable = capabilities["qemu"]["executable"]
     command[0] = executable
-    version = subprocess.run([executable, "--version"], check=True, text=True,
-                             stdout=subprocess.PIPE).stdout.splitlines()[0]
     iso_sha256 = digest(iso)
     if args.expected_sha256 and iso_sha256 != args.expected_sha256.lower():
         raise ValueError(f"ISO SHA-256 mismatch: computed {iso_sha256}")
     output.mkdir(parents=True)
     shutil.copyfile(variables, output / "OVMF_VARS.fd")
-    profile["hypervisor_version"] = version
+    profile["hypervisor_version"] = capabilities["qemu"]["version"] or "unavailable"
     # An OVMF filename does not establish its version; record the exact bytes.
     profile["firmware_version"] = "sha256:" + digest(firmware)
     write_json(output / "vm-profile.json", profile)
+    write_json(output / "host-capabilities.json", capabilities)
     manifest = {
         "started_utc": timestamp(), "image_name": iso.name,
         "iso_sha256": iso_sha256, "iso_size_bytes": iso.stat().st_size,
-        "profile": args.profile, "network": args.network,
+        "profile": args.profile, "cpu_acceleration": accel, "graphics": graphics, "network": args.network,
         "display": args.display, "command": command,
         "ovmf_variables_template_sha256": digest(variables),
         "status": "starting",
@@ -240,6 +350,8 @@ def main():
     run.add_argument("iso", type=Path)
     run.add_argument("--output", type=Path, required=True, help="new evidence directory; existing runs are never overwritten")
     run.add_argument("--profile", choices=("software", "accelerated"), default="software")
+    run.add_argument("--accel", choices=("tcg", "kvm"), help="override profile CPU acceleration; never falls back")
+    run.add_argument("--graphics", choices=("software", "virgl"), help="override profile graphics independently of CPU acceleration")
     run.add_argument("--display", choices=("gtk", "headless"), default="gtk")
     run.add_argument("--memory", type=positive, default=4096, metavar="MIB")
     run.add_argument("--cpus", type=positive, default=2)
@@ -247,12 +359,18 @@ def main():
     run.add_argument("--network", choices=("none", "user"), default="none")
     run.add_argument("--firmware", type=Path, default=Path("/usr/share/OVMF/OVMF_CODE_4M.fd"))
     run.add_argument("--variables", type=Path, default=Path("/usr/share/OVMF/OVMF_VARS_4M.fd"))
-    run.add_argument("--render-node", type=Path, help="GPU render node for accelerated headless EGL only")
+    run.add_argument("--render-node", type=Path, help="GPU render node for VirGL headless EGL only")
     run.add_argument("--qemu", default="qemu-system-x86_64")
     run.add_argument("--expected-sha256", help="fail before booting unless the ISO matches this SHA-256")
     run.add_argument("--max-seconds", type=positive, help="stop after this limit; exit 124 does not mean a boot passed")
     run.add_argument("--dry-run", action="store_true", help="validate paths and print the plan without creating a run")
     run.set_defaults(handler=launch)
+    preflight = actions.add_parser("inspect", help="record host devices and QEMU advertised support without booting")
+    preflight.add_argument("--qemu", default="qemu-system-x86_64")
+    preflight.add_argument("--display", choices=("gtk", "headless"), default="headless")
+    preflight.add_argument("--render-node", type=Path)
+    preflight.add_argument("--output", type=Path, help="new JSON evidence file; existing files are never overwritten")
+    preflight.set_defaults(handler=inspect)
     capture = actions.add_parser("capture", help="save a PNG of the current framebuffer through QMP")
     capture.add_argument("output", type=Path, help="same evidence directory used by run")
     capture.add_argument("--name", default="screen")

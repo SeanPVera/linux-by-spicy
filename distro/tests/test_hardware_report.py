@@ -41,6 +41,7 @@ class HardwareReportTests(unittest.TestCase):
             self.assertTrue(observations["image"]["expected_digest_matches"])
             self.assertFalse(observations["image"]["boot_origin_confirmed"])
             self.assertEqual(observations["diagnostics"]["graphics"]["kwin"]["status"], "missing_command")
+            self.assertEqual(observations["diagnostics"]["graphics"]["kwin_process_environment"]["status"], "missing_command")
             self.assertEqual(observations["diagnostics"]["peripherals"]["network_manager"]["status"], "missing_command")
             self.assertEqual(len(matrix["scaling"]), 80)
             self.assertIn([3840, 2160], [case["resolution"] for case in matrix["scaling"]])
@@ -100,6 +101,90 @@ class HardwareReportTests(unittest.TestCase):
         fields = REPORT.selected_lines(source, REPORT.KWIN_FIELDS)
         self.assertEqual(fields["OpenGL renderer string"], "llvmpipe")
         self.assertNotIn("private", json.dumps(fields))
+
+    def test_collector_overrides_are_distinct_from_kwin_process_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            process = Path(directory) / "123"
+            process.mkdir()
+            (process / "comm").write_text("kwin_wayland\n")
+            (process / "environ").write_bytes(b"KWIN_COMPOSE=Q\0USER=private-user\0HOME=/home/private-user\0QT_QUICK_BACKEND=/home/private-value\0")
+
+            def probe(argv, **kwargs):
+                output = ("123\n" if "org.freedesktop.DBus.GetConnectionUnixProcessID" in argv
+                          else "OpenGL renderer string: llvmpipe\n" if argv[0] != "kscreen-doctor"
+                          else '{"outputs": []}')
+                return {"status": "ok", "command": argv[0]}, output
+
+            process_probe = REPORT.kwin_process_environment
+            with patch.object(REPORT, "command", side_effect=probe), \
+                    patch.object(REPORT.shutil, "which", side_effect=lambda name: name), \
+                    patch.object(REPORT, "kwin_process_environment", side_effect=lambda qdbus: process_probe(qdbus, Path(directory))), \
+                    patch.dict(REPORT.os.environ, {"LIBGL_ALWAYS_SOFTWARE": "1", "USER": "private-user"}, clear=True):
+                data = REPORT.graphics()
+            self.assertEqual(data["renderer_overrides"], {"LIBGL_ALWAYS_SOFTWARE": "1"})
+            self.assertIn("Collector process", data["renderer_overrides_scope"])
+            kwin = data["kwin_process_environment"]
+            self.assertEqual(kwin["status"], "partial")
+            self.assertEqual(kwin["variables"], {"KWIN_COMPOSE": "Q"})
+            self.assertEqual(kwin["omitted_invalid_values"], ["QT_QUICK_BACKEND"])
+            self.assertNotIn("private", json.dumps(data))
+
+    def test_kwin_environment_unavailable_pid_probes_stay_explicit(self):
+        for status in ("missing_command", "failed", "timeout"):
+            with self.subTest(status=status), patch.object(REPORT, "command", return_value=({"status": status}, None)):
+                data = REPORT.kwin_process_environment("qdbus6")
+            self.assertEqual(data["status"], status)
+            self.assertEqual(data["variables"], {})
+        with patch.object(REPORT, "command", return_value=({"status": "ok"}, "/home/private-user")):
+            data = REPORT.kwin_process_environment("qdbus6")
+        self.assertEqual(data["status"], "invalid_pid")
+        self.assertNotIn("private", json.dumps(data))
+
+    def test_kwin_environment_missing_or_unreadable_process_is_not_an_empty_success(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(REPORT, "command", return_value=({"status": "ok"}, "123")):
+            root = Path(directory)
+            self.assertEqual(REPORT.kwin_process_environment("qdbus6", root)["status"], "process_unavailable")
+            process = root / "123"
+            process.mkdir()
+            (process / "comm").write_text("kwin_wayland\n")
+            with patch.object(REPORT.Path, "open", side_effect=PermissionError("/home/private-user/environ")):
+                data = REPORT.kwin_process_environment("qdbus6", root)
+            self.assertEqual(data["status"], "unreadable")
+            self.assertEqual(data["variables"], {})
+            self.assertNotIn("private", json.dumps(data))
+
+    def test_kwin_environment_refuses_another_user_or_unexpected_process(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(REPORT, "command", return_value=({"status": "ok"}, "123")):
+            root = Path(directory)
+            process = root / "123"
+            process.mkdir()
+            (process / "comm").write_text("private-process\n")
+            (process / "environ").write_bytes(b"KWIN_COMPOSE=Q\0")
+            uid = os.getuid()
+            with patch.object(REPORT.os, "getuid", return_value=uid + 1):
+                self.assertEqual(REPORT.kwin_process_environment("qdbus6", root)["status"], "different_user")
+            data = REPORT.kwin_process_environment("qdbus6", root)
+            self.assertEqual(data["status"], "unexpected_process")
+            self.assertEqual(data["variables"], {})
+            self.assertNotIn("private", json.dumps(data))
+
+    def test_kwin_environment_bounded_reads_and_absent_overrides(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(REPORT, "command", return_value=({"status": "ok"}, "123")):
+            root = Path(directory)
+            process = root / "123"
+            process.mkdir()
+            (process / "comm").write_text("kwin_x11\n")
+            (process / "environ").write_bytes(b"USER=private-user\0")
+            data = REPORT.kwin_process_environment("qdbus6", root)
+            self.assertEqual(data["status"], "ok")
+            self.assertEqual(data["variables"], {})
+            (process / "environ").write_bytes(b"KWIN_COMPOSE=Q\0" + b"x" * 131072)
+            data = REPORT.kwin_process_environment("qdbus6", root)
+            self.assertEqual(data["status"], "too_large")
+            self.assertEqual(data["variables"], {})
 
     def test_firmware_variable_format_and_access_failure_remain_explicit(self):
         with patch.object(REPORT.Path, "read_bytes", return_value=b"\x07\x00\x00\x00\x01"):

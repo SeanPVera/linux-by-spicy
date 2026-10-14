@@ -13,5 +13,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     qemu-system-x86 ovmf plymouth plymouth-themes plymouth-x11 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
-RUN apt-get update && apt-get install -y --no-install-recommends libqt6svg6 qt6-svg-plugins dbus-bin \
+RUN apt-get update && apt-get install -y --no-install-recommends libqt6svg6 qt6-svg-plugins dbus-bin qemu-system-gui \
     && rm -rf /var/lib/apt/lists/*

@@ -5,6 +5,33 @@ accelerated graphics on a host that supports KVM and VirGL. A software VM can
 exercise boot and layout; its rendering stalls do not establish graphics-driver
 support or the behavior of a real Intel, AMD or NVIDIA GPU.
 
+## Inspect host prerequisites
+
+Record capabilities in the environment that will actually launch QEMU before
+choosing an accelerated run:
+
+```sh
+./distro/tools/run-vm inspect --display headless \
+  --output distro/build/vm/host-preflight.json
+```
+
+Use `--display gtk` for an interactive run, and add
+`--render-node /dev/dri/renderD129` to inspect a specific headless EGL GPU.
+No ISO or firmware is needed. The JSON records QEMU version, bounded help
+probes for accelerator/device/display support, and existence, character-device
+type and current-user read/write access for `/dev/kvm` and render nodes.
+Existing evidence files are never overwritten; omit `--output` to print only.
+
+Each CPU/graphics combination is `blocked` when a known prerequisite is absent,
+or `unverified` when no known blocker was found. Missing or failed QEMU help
+probes stay explicit. Help listings and file access do not initialize KVM,
+EGL or GTK, prove host GL support, or certify the guest renderer. Launch and
+guest observations must establish those separately. Run inspection inside a
+container when QEMU will run there: host devices are unavailable to the
+container unless explicitly passed through.
+Debian splits GTK/EGL/VirGL support into the `qemu-system-gui` package;
+installation of the base QEMU executable alone does not establish GL support.
+
 ## Boot a disposable live session
 
 On a Linux host with Python 3, QEMU and OVMF installed:
@@ -20,12 +47,17 @@ attaches no hard disk. The live account is `spicy`; its password is `live`.
 No installer is present. Exit the VM before starting a new run, and use a new
 output directory so earlier evidence stays intact. `--dry-run` prints the
 configuration without creating files or starting QEMU.
+Dry runs check paths and construct the requested command; they skip host
+capability checks and are not evidence that a configuration can boot.
 
 Each run records `run.json` with the ISO's computed SHA-256, QEMU command and
 start/end times; `vm-profile.json` contains the collector's VM metadata.
 `qemu.log` and `serial.log` retain host-side messages. The exact OVMF firmware
 and initial variable template are identified by SHA-256. This unsigned OVMF
 profile exercises UEFI boot; it does not validate Secure Boot.
+`host-capabilities.json` retains the launcher environment's prerequisite
+inspection. `run.json` records the resolved CPU acceleration and graphics
+choices in addition to the selected base profile.
 
 Use `--expected-sha256 DIGEST` to enforce a reviewed image checksum, and
 `--max-seconds 900` to cap a run. A timeout exits 124; that is a time limit,
@@ -46,6 +78,29 @@ It fails if the required devices are unavailable.
 Confirm the actual renderer from the guest collector before recording an
 accelerated result. `--display headless` uses EGL with the accelerated profile
 and no display backend with the software profile.
+
+For fault isolation, override CPU acceleration and graphics independently:
+
+```sh
+# Retain guest software rendering while removing TCG CPU emulation.
+./distro/tools/run-vm run distro/dist/spicy-linux-0.1-alpha-amd64.iso \
+  --output distro/build/vm/kvm-software-1080p --profile software --accel kvm
+
+# Retain TCG while testing VirGL through an accessible GPU render node.
+./distro/tools/run-vm run distro/dist/spicy-linux-0.1-alpha-amd64.iso \
+  --output distro/build/vm/tcg-virgl-1080p --profile software --graphics virgl \
+  --display headless --render-node /dev/dri/renderD128
+```
+
+`software` still defaults to TCG with `virtio-vga`; `accelerated` still defaults
+to KVM with `virtio-vga-gl`. `--accel {tcg,kvm}` and
+`--graphics {software,virgl}` replace only the indicated profile setting.
+KVM requires accessible `/dev/kvm`; VirGL requires a render node and QEMU's
+GL graphics device/backend support independently of the CPU accelerator.
+Known missing prerequisites stop the launch before creating a run. The
+launcher never silently switches CPU acceleration or graphics. QEMU itself
+must initialize the selected backend successfully; verify guest KWin's actual
+renderer even after a successful launch.
 
 ## Run and capture inside the existing builder
 

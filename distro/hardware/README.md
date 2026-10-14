@@ -123,6 +123,15 @@ Save boot screenshots from the host when the guest cannot capture Plymouth.
 For a graphics fault, capture diagnostics while the session is still responsive
 and record whether the KWin renderer is software or hardware accelerated. The
 GLX probe usually describes XWayland and is explicitly not KWin certification.
+The existing `renderer_overrides` field describes the collector's environment;
+its scope is explicit and an empty map does not establish KWin's environment.
+`kwin_process_environment` separately reads the initial environment of the KWin
+process owning this session's D-Bus service. Only `KWIN_COMPOSE`,
+`LIBGL_ALWAYS_SOFTWARE` and `QT_QUICK_BACKEND` with bounded simple values are
+retained. Missing tools, failed PID discovery, exited processes and unreadable
+process environments remain explicit; invalid values are omitted by field name.
+This probe does not capture later environment changes or prove which renderer
+KWin selected. Use KWin's renderer fields for that observation.
 Keep optional journals locally until reviewed: journals can contain application
 titles, usernames, network names and filesystem paths.
 

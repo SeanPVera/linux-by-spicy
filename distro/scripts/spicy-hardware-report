@@ -38,6 +38,7 @@ GL_FIELDS = {
     "direct rendering", "OpenGL vendor string", "OpenGL renderer string",
     "OpenGL core profile version string", "OpenGL version string",
 }
+RENDERER_OVERRIDE_FIELDS = ("KWIN_COMPOSE", "LIBGL_ALWAYS_SOFTWARE", "QT_QUICK_BACKEND")
 RESOLUTIONS = (
     (1024, 768), (1280, 720), (1280, 800), (1366, 768), (1920, 1080),
     (1920, 1200), (2560, 1440), (2560, 1600), (3440, 1440), (3840, 2160),
@@ -188,6 +189,68 @@ def displays():
     return probe
 
 
+def renderer_overrides(environment):
+    values = {}
+    omitted = []
+    for name in RENDERER_OVERRIDE_FIELDS:
+        value = environment.get(name)
+        if value:
+            if re.fullmatch(r"[A-Za-z0-9_-]{1,32}", value):
+                values[name] = value
+            else:
+                # Keep the field name, never a potentially private value.
+                omitted.append(name)
+    return values, omitted
+
+
+def kwin_process_environment(qdbus, proc_root=Path("/proc")):
+    """Read only the compositor serving this session, not another user's KWin."""
+    probe, output = command([
+        qdbus, "org.freedesktop.DBus", "/org/freedesktop/DBus",
+        "org.freedesktop.DBus.GetConnectionUnixProcessID", "org.kde.KWin",
+    ])
+    observation = {
+        "status": probe["status"], "pid_probe": probe, "variables": {},
+        "scope": "Allowlisted initial environment of the session D-Bus KWin owner; runtime environment changes are not captured.",
+    }
+    if output is None:
+        return observation
+    pid = output.strip()
+    if not re.fullmatch(r"[1-9][0-9]{0,9}", pid):
+        observation["status"] = "invalid_pid"
+        return observation
+    process = proc_root / pid
+    try:
+        if process.stat().st_uid != os.getuid():
+            observation["status"] = "different_user"
+            return observation
+        name = (process / "comm").read_text(encoding="ascii").strip()
+        if name not in ("kwin_wayland", "kwin_x11"):
+            observation["status"] = "unexpected_process"
+            return observation
+        with (process / "environ").open("rb") as stream:
+            data = stream.read(131073)
+    except FileNotFoundError:
+        observation["status"] = "process_unavailable"
+        return observation
+    except (OSError, UnicodeError):
+        observation["status"] = "unreadable"
+        return observation
+    if len(data) > 131072:
+        observation["status"] = "too_large"
+        return observation
+    allowed = {name.encode("ascii") for name in RENDERER_OVERRIDE_FIELDS}
+    environment = {}
+    for item in data.split(b"\0"):
+        key, separator, value = item.partition(b"=")
+        if separator and key in allowed:
+            environment[key.decode("ascii")] = value.decode("ascii", errors="replace")
+    values, omitted = renderer_overrides(environment)
+    observation.update(status="partial" if omitted else "ok", process=name,
+                       variables=values, omitted_invalid_values=omitted)
+    return observation
+
+
 def graphics():
     qdbus = next((name for name in ("qdbus6", "qdbus-qt6", "qdbus") if shutil.which(name)), "qdbus6")
     kwin, output = command([qdbus, "org.kde.KWin", "/KWin", "org.kde.KWin.supportInformation"])
@@ -206,12 +269,14 @@ def graphics():
         status = read_text(path / "status")
         if status is not None:
             connectors.append({"connector": path.name, "status": status, "modes": (read_text(path / "modes") or "").splitlines()})
-    overrides = {}
-    for name in ("KWIN_COMPOSE", "LIBGL_ALWAYS_SOFTWARE", "QT_QUICK_BACKEND"):
-        value = os.environ.get(name)
-        if value and re.fullmatch(r"[A-Za-z0-9_-]{1,32}", value):
-            overrides[name] = value
-    return {"kwin": kwin, "glx_client": gl, "kscreen": displays(), "drm_connectors": connectors, "renderer_overrides": overrides}
+    overrides, omitted = renderer_overrides(os.environ)
+    return {
+        "kwin": kwin, "glx_client": gl, "kscreen": displays(),
+        "drm_connectors": connectors, "renderer_overrides": overrides,
+        "renderer_overrides_scope": "Collector process environment only; does not establish KWin's process environment.",
+        "renderer_overrides_omitted_invalid_values": omitted,
+        "kwin_process_environment": kwin_process_environment(qdbus),
+    }
 
 
 def packages():

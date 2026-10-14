@@ -23,6 +23,14 @@ wallpaper exports and ISO files stay out of Git; CI publishes build artifacts.
 
 ## 2. Hardware and everyday-use beta
 
+Start with repeatable VM runs: compare the explicit software baseline with an
+accelerated graphics profile where the host supports it. Exercise appearance
+changes, reduced motion, boot portrait, sign-in and lock/unlock before extending
+the campaign to physical machines. Record the exact ISO digest and VM profile
+using [the VM workflow](VM_VALIDATION.md) and
+[the validation kit](hardware/README.md). A software-only run does not establish
+accelerated graphics stability.
+
 Test real Intel/AMD laptops and desktops before describing hardware support.
 Cover Wi-Fi, Bluetooth, audio, webcams, suspend/resume, external monitors and
 common integrated/discrete graphics. Record the machine and firmware versions

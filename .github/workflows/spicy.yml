@@ -43,6 +43,14 @@ jobs:
         run: |
           docker run --rm --mount "type=bind,src=$PWD,dst=/src" \
             spicy-builder:alpha sh distro/tools/validate-live-config
+      - name: Check Plymouth rendering and initramfs assets
+        run: |
+          docker run --rm --mount "type=bind,src=$PWD,dst=/src" \
+            spicy-builder:alpha python3 distro/tools/check-plymouth
+      - name: Check release package install and removal
+        run: |
+          docker run --rm --mount "type=bind,src=$PWD,dst=/src" \
+            spicy-builder:alpha sh distro/tools/check-release
       - uses: actions/upload-artifact@v4
         with:
           name: spicy-desktop-alpha

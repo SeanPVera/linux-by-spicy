@@ -4,10 +4,21 @@
 import argparse
 import json
 import subprocess
+import sys
+import time
+
+
+# A stalled desktop must not leave the welcome app busy indefinitely. These
+# limits do not change the graphics backend or interrupt the Plasma session.
+COMMAND_TIMEOUT = 8
+APPLY_TIMEOUT = 30
+REFRESH_TIMEOUT = 4
+SAVED_REFRESH_PENDING = 2
 
 
 def commands(theme=None, reduced=None):
     result = []
+    refresh = []
     def config(file, groups, key, value):
         command = ["kwriteconfig6", "--file", file]
         for group in groups:
@@ -29,15 +40,59 @@ def commands(theme=None, reduced=None):
         config("kscreenlockerrc", ["Greeter", "Wallpaper", "org.kde.image", "General"], "Image", "file:///usr/share/wallpapers/SpicySleeping/contents/images/3840x2160.png")
         config("ksplashrc", ["KSplash"], "Theme", "org.spicy." + theme + ".desktop")
         config("ksplashrc", ["KSplash"], "Engine", "KSplashQML")
-        config("spicyrc", ["Appearance"], "Theme", theme)
         wallpaper = "file:///usr/share/wallpapers/Spicy" + suffix + "/contents/images/3840x2160.png"
         script = 'var all = desktops(); for (var i=0; i<all.length; ++i) { all[i].wallpaperPlugin="org.kde.image"; all[i].currentConfigGroup=["Wallpaper","org.kde.image","General"]; all[i].writeConfig("Image",' + json.dumps(wallpaper) + '); }'
-        result.append(["dbus-send", "--session", "--print-reply", "--dest=org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell.evaluateScript", "string:" + script])
-        result.append(["dbus-send", "--session", "--print-reply", "--dest=org.kde.KWin", "/KWin", "org.kde.KWin.reconfigure"])
+        refresh.append(["dbus-send", "--session", "--print-reply", "--reply-timeout=3000", "--dest=org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell.evaluateScript", "string:" + script])
+    if reduced is not None:
+        config("kdeglobals", ["KDE"], "AnimationDurationFactor", "0" if reduced else "1")
+    # Record the welcome app's preferences after the KDE configuration writes
+    # succeed, so a failed write does not advertise a completed selection.
+    if theme:
+        config("spicyrc", ["Appearance"], "Theme", theme)
     if reduced is not None:
         config("spicyrc", ["Appearance"], "ReducedMotion", "true" if reduced else "false")
-        config("kdeglobals", ["KDE"], "AnimationDurationFactor", "0" if reduced else "1")
-    return result
+    if theme or reduced is not None:
+        refresh.append(["dbus-send", "--session", "--print-reply", "--reply-timeout=3000", "--dest=org.kde.KWin", "/KWin", "org.kde.KWin.reconfigure"])
+    return result + refresh
+
+
+def run_action(action, timeout):
+    destination = next((arg.removeprefix("--dest=") for arg in action if arg.startswith("--dest=")), None)
+    label = action[0] + (f" ({destination})" if destination else "")
+    try:
+        subprocess.run(action, check=True, timeout=timeout, capture_output=True, text=True)
+    except subprocess.TimeoutExpired:
+        print(f"{label} did not respond within {timeout:g} seconds.", file=sys.stderr)
+        return False
+    except (OSError, subprocess.CalledProcessError) as error:
+        print(f"{label} failed: {error}", file=sys.stderr)
+        if isinstance(error, subprocess.CalledProcessError) and error.stderr:
+            print(error.stderr.strip(), file=sys.stderr)
+        return False
+    return True
+
+
+def apply(actions):
+    deadline = time.monotonic() + APPLY_TIMEOUT
+    required = [action for action in actions if action[0] != "dbus-send"]
+    refresh = [action for action in actions if action[0] == "dbus-send"]
+    for action in required:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            print("Appearance changes took too long. Try again when the desktop is responding.", file=sys.stderr)
+            return 1
+        if not run_action(action, min(COMMAND_TIMEOUT, remaining)):
+            return 1
+    # Each refresh gets its own bounded attempt: a busy shell must not prevent
+    # KWin from reloading, and a refresh failure does not undo saved settings.
+    pending = False
+    for action in refresh:
+        if not run_action(action, REFRESH_TIMEOUT):
+            pending = True
+    if pending:
+        print("Preferences saved; the desktop refresh is incomplete. Try again when the desktop is responding.", file=sys.stderr)
+        return SAVED_REFRESH_PENDING
+    return 0
 
 
 def main():
@@ -49,10 +104,9 @@ def main():
     actions = commands(args.theme, None if args.reduced_motion is None else args.reduced_motion == "on")
     if args.dry_run:
         print(json.dumps(actions, indent=2))
-        return
-    for action in actions:
-        subprocess.run(action, check=True)
+        return 0
+    return apply(actions)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

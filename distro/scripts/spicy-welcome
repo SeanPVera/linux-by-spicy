@@ -58,23 +58,43 @@ class Backend(QObject):
         self._busy = True
         self._status = "Getting comfortable…"
         self.changed.emit()
-        self.process = QProcess(self)
-        def finished(code, _status):
+        process = QProcess(self)
+        self.process = process
+
+        def complete(status, saved=False):
+            if self.process is not process:
+                return
             self._busy = False
-            if code == 0 and on_success:
+            if saved and on_success:
                 on_success()
-            self._status = success if code == 0 else "Couldn't apply that setting. You can also change it in System Settings."
-            self.changed.emit()
-            self.process.deleteLater()
+            self._status = status
             self.process = None
-        self.process.finished.connect(finished)
-        def failed(_error):
-            if self._busy:
-                self._busy = False
-                self._status = "Couldn't open the appearance tool. Try System Settings."
-                self.changed.emit()
-        self.process.errorOccurred.connect(failed)
-        self.process.start("spicy-appearance", arguments)
+            process.deleteLater()
+            self.changed.emit()
+
+        def finished(code, exit_status):
+            normal = exit_status == QProcess.NormalExit
+            if normal and code == 0:
+                complete(success, saved=True)
+            elif normal and code == 2:
+                # spicy-appearance reserves 2 for saved settings whose live
+                # Plasma/KWin refresh failed or timed out.
+                complete("Your preference is saved. Try again when the desktop is responding to finish applying it.", saved=True)
+            else:
+                details = bytes(process.readAllStandardError()).decode("utf-8", errors="replace").strip()
+                if details:
+                    print(details, file=sys.stderr)
+                complete("Couldn't finish applying that setting. Try again when the desktop is responding, or use System Settings.")
+        process.finished.connect(finished)
+
+        def failed(error):
+            # A crashed process also emits finished; only a failed start needs
+            # cleanup here. Capture this process so retries cannot clean up a
+            # different, newer appearance request.
+            if error == QProcess.FailedToStart:
+                complete("Couldn't open the appearance tool. Try System Settings.")
+        process.errorOccurred.connect(failed)
+        process.start("spicy-appearance", arguments)
 
     @Slot(str)
     def setTheme(self, name):

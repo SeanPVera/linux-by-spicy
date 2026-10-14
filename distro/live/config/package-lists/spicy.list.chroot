@@ -26,6 +26,10 @@ powerdevil
 xdg-desktop-portal-kde
 xdg-utils
 mesa-vulkan-drivers
+mesa-utils
+mokutil
+libkscreen-bin
+qdbus-qt6
 firmware-iwlwifi
 firmware-realtek
 firmware-amd-graphics

@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 set -eu
 repo="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)"
-packages="$repo/distro/dist"
-[ -f "$packages/spicy-desktop_0.1.0~alpha1_all.deb" ] || "$repo/distro/scripts/build-packages"
+# Rebuild local packages so source fixes cannot silently reuse stale .debs.
+"$repo/distro/scripts/build-packages"
 docker run --rm --privileged \
     --mount "type=bind,src=$repo,dst=/src" \
     -e SPICY_OWNER_UID="$(id -u)" -e SPICY_OWNER_GID="$(id -g)" \

@@ -62,6 +62,9 @@ spicy-appearance --reduced-motion on
 
 Applying a theme does not reset existing panel layouts. New live-image users get
 the Spicy launcher, task panel, system tray and clock on their first login.
+Appearance commands have bounded waits so an unresponsive desktop cannot leave
+the welcome app busy indefinitely. The app reports when a live refresh remains
+incomplete; retry the same preference once the desktop is responding.
 
 ## Build the live image
 
@@ -95,11 +98,25 @@ contrast and the selected art direction. Real Qt renders exercise lower
 resolutions through 3840×2160 at 100%, 125%, 150% and 200% scaling. Native
 previews and JSON results go under `distro/build/previews/`.
 
+Check the real Plymouth script renderer and Debian's initramfs asset copying in
+a separate disposable container (the daemon requires root inside the container):
+
+```sh
+docker run --rm --mount "type=bind,src=$PWD,dst=/src" \
+  spicy-builder:alpha python3 distro/tools/check-plymouth
+```
+
 The Qt checks do not substitute for a boot test of the complete Plasma desktop.
 KWin composition is needed for blur; applications using other toolkits retain
 their own application styling. Reduced motion is available from the welcome app.
 The observed VM results and remaining release gates are recorded in
 [the validation notes](distro/VALIDATION.md).
+
+Start the next live-image validation with
+[the VM workflow](distro/VM_VALIDATION.md). The
+[hardware validation kit](distro/hardware/README.md) records image provenance,
+graphics and session observations, and manual results without treating an
+unperformed check as a pass. Physical hardware follows the VM campaign.
 
 ## Art direction and licensing
 

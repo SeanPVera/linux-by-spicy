@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
+"""Check Debian's initramfs staging and render its Spicy theme using Plymouth.
+
+Run as root in the disposable builder container after building packages. This
+uses Xvfb and Plymouth's real script/X11 plugins; it does not validate DRM, a
+kernel boot, or Secure Boot. Plymouth supports integer device scales, so these
+checks use 1x and 2x, independently of Plasma's fractional scaling checks.
+"""
+import configparser
+import json
+import math
+import os
+from pathlib import Path
+import re
+import select
+import shutil
+import subprocess
+import tempfile
+import time
+
+from PIL import Image, ImageChops, ImageGrab, ImageStat
+
+ROOT = Path(__file__).resolve().parents[1]
+STAGE = ROOT / "build/packages/spicy-desktop"
+THEME = Path("/usr/share/plymouth/themes/spicy")
+OUTPUT = ROOT / "build/previews/plymouth"
+RESOLUTIONS = ((1024, 768), (1280, 720), (1366, 768), (1280, 800),
+               (1920, 1080), (1920, 1200), (2560, 1440), (2560, 1600),
+               (3440, 1440), (3840, 2160))
+
+
+def run(*args, **kwargs):
+    return subprocess.run(args, check=True, timeout=20, **kwargs)
+
+
+def validate_frame(frame, source, width, height, scale):
+    """Check the rendered approved portrait and a continuous visible track."""
+    assert frame.size == (width, height), frame.size
+    logical_w, logical_h = width / scale, height / scale
+    side = min(logical_w * .25, logical_h * .34)
+    pixel_side = math.floor(side) * scale
+    x = math.floor((logical_w - side) / 2) * scale
+    y = math.floor(logical_h * .23) * scale
+    assert 0 <= x and x + pixel_side <= width
+    assert 0 <= y and y + pixel_side < height * .67
+    background = frame.getpixel((0, 0))
+    expected = Image.new("RGBA", (pixel_side, pixel_side), background + (255,))
+    expected.alpha_composite(source.resize(expected.size, Image.Resampling.BILINEAR))
+    # Compare small, smoothed samples to tolerate renderer interpolation and
+    # one-pixel placement rounding while detecting missing or distorted art.
+    expected = expected.convert("RGB").resize((32, 32), Image.Resampling.BILINEAR)
+    actual = frame.crop((x, y, x + pixel_side, y + pixel_side))
+    actual = actual.resize((32, 32), Image.Resampling.BILINEAR)
+    error = sum(ImageStat.Stat(ImageChops.difference(actual, expected)).mean) / 3
+    assert error < 12, f"Portrait does not match approved art (mean error {error:.2f})"
+    assert sum(ImageStat.Stat(ImageChops.difference(
+        actual, Image.new("RGB", actual.size, background))).mean) / 3 > 15, "Portrait is blank"
+    bar_width = min(logical_w * .52, 460)
+    bar_x = math.floor((logical_w - bar_width) / 2) * scale
+    bar_y = math.floor(logical_h * .67) * scale + 2 * scale
+    row = [frame.getpixel((p, bar_y)) for p in
+           range(bar_x, bar_x + math.floor(bar_width) * scale)]
+    visible = sum(max(abs(a - b) for a, b in zip(pixel, background)) > 8 for pixel in row)
+    coverage = visible / len(row)
+    assert coverage > .9, f"Progress track is missing or letterboxed ({coverage:.1%} visible)"
+    return {"width": width, "height": height, "device_scale": scale,
+            "portrait_mean_error": round(error, 3), "track_coverage": round(coverage, 3)}
+
+
+def render(source, width, height, scale, work):
+    name = f"{width}x{height}-{scale}x"
+    env = dict(os.environ, PLYMOUTH_FORCE_SCALE=str(scale))
+    xvfb = subprocess.Popen(["Xvfb", "-displayfd", "1", "-screen", "0",
+                             f"{width}x{height}x24", "-nolisten", "tcp", "-dpi", "96"],
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    daemon = None
+    try:
+        assert select.select([xvfb.stdout], [], [], 10)[0], "Xvfb did not become ready"
+        env["DISPLAY"] = ":" + xvfb.stdout.readline().strip()
+        daemon = subprocess.Popen(["plymouthd", "--no-daemon", "--mode=boot", "--no-boot-log",
+                                   "--debug", f"--debug-file={OUTPUT / (name + '.log')}",
+                                   f"--pid-file={work / 'plymouth.pid'}",
+                                   "--kernel-command-line=quiet splash"], env=env,
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        deadline = time.monotonic() + 5
+        while subprocess.run(["plymouth", "--ping"], stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, timeout=2).returncode:
+            assert daemon.poll() is None and time.monotonic() < deadline, "Plymouth did not start"
+            time.sleep(.05)
+        run("plymouth", "show-splash")
+        deadline = time.monotonic() + 5
+        while True:
+            frame = ImageGrab.grab(xdisplay=env["DISPLAY"]).convert("RGB")
+            try:
+                result = validate_frame(frame, source, width, height, scale)
+                break
+            except AssertionError:
+                if time.monotonic() >= deadline:
+                    frame.save(OUTPUT / (name + "-failed.png"))
+                    raise
+                time.sleep(.1)
+        frame.save(OUTPUT / (name + ".png"))
+        return result
+    finally:
+        if daemon is not None and daemon.poll() is None:
+            try:
+                subprocess.run(["plymouth", "quit"], timeout=5, check=False)
+            except subprocess.TimeoutExpired:
+                pass
+            try:
+                daemon.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                daemon.kill()
+                daemon.wait()
+        if xvfb.poll() is None:
+            xvfb.terminate()
+            try:
+                xvfb.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                xvfb.kill()
+                xvfb.wait()
+        log = OUTPUT / (name + ".log")
+        if log.exists():
+            # Plymouth creates debug logs with root-only permissions; CI's
+            # artifact uploader and the workspace user need to read them.
+            log.chmod(0o644)
+
+
+def main():
+    if os.geteuid() != 0 or not Path("/.dockerenv").exists():
+        raise SystemExit("Run check-plymouth as root in the disposable Docker builder container.")
+    if subprocess.run(["plymouth", "--ping"], stdout=subprocess.DEVNULL,
+                      stderr=subprocess.DEVNULL, timeout=5).returncode == 0:
+        raise SystemExit("A Plymouth daemon is already running in this container.")
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    (OUTPUT / "results.json").unlink(missing_ok=True)
+    for failed in OUTPUT.glob("*-failed.png"):
+        failed.unlink()
+    with tempfile.TemporaryDirectory(prefix="spicy-plymouth-") as directory:
+        work = Path(directory)
+        previous_theme = run("plymouth-set-default-theme", capture_output=True, text=True).stdout.strip()
+        saved_theme = work / "original-theme"
+        if THEME.exists():
+            shutil.move(THEME, saved_theme)
+        try:
+            shutil.copytree(STAGE / THEME.relative_to("/"), THEME)
+            run("plymouth-set-default-theme", "spicy")
+            initramfs = work / "initramfs"
+            initramfs.mkdir()
+            env = dict(os.environ, DESTDIR=str(initramfs), MODULES="list", verbose="n", version="validation")
+            hook = run("/usr/share/initramfs-tools/hooks/plymouth", env=env,
+                       capture_output=True, text=True)
+            (OUTPUT / "initramfs-hook.log").write_text(hook.stdout + hook.stderr)
+            staged_theme = initramfs / THEME.relative_to("/")
+            config = configparser.ConfigParser()
+            config.read(staged_theme / "spicy.plymouth")
+            assets = initramfs / config["script"]["ImageDir"].lstrip("/")
+            script = initramfs / config["script"]["ScriptFile"].lstrip("/")
+            assert script.is_file(), "Theme script missing from Debian's initramfs staging"
+            for filename in set(re.findall(r'Image\("([^\"]+)"\)', script.read_text())):
+                assert (assets / filename).is_file(), f"Initramfs is missing {assets / filename}"
+            assert (assets / "portrait.png").read_bytes() == (ROOT / "artwork/portrait.png").read_bytes(), \
+                "The initramfs portrait must preserve the approved artwork exactly"
+            # Render the theme and assets copied by Debian's actual hook. No
+            # shared artwork directory is installed by this check.
+            shutil.rmtree(THEME)
+            shutil.copytree(staged_theme, THEME)
+            with Image.open(assets / "portrait.png") as image:
+                source = image.convert("RGBA")
+            results = [render(source, width, height, scale, work)
+                       for width, height in RESOLUTIONS for scale in (1, 2)]
+            report = {"renderer": "Plymouth script plugin with X11 under Xvfb",
+                      "plymouth_version": run("dpkg-query", "-W", "-f=${Version}", "plymouth",
+                                              capture_output=True, text=True).stdout,
+                      "initramfs_hook": "Debian installed plymouth hook; MODULES=list",
+                      "portrait_matches_approved_source": True, "renders": results,
+                      "limitations": "No DRM, kernel boot, hardware or Secure Boot validation."}
+            (OUTPUT / "results.json").write_text(json.dumps(report, indent=2) + "\n")
+            print(f"Plymouth: Debian initramfs assets verified; {len(results)} native renders passed through 4K at 1x/2x.")
+        finally:
+            shutil.rmtree(THEME, ignore_errors=True)
+            if saved_theme.exists():
+                shutil.move(saved_theme, THEME)
+            if previous_theme:
+                run("plymouth-set-default-theme", previous_theme)
+            # The daemon needs container root, but later native Qt checks and
+            # cleanup run as the checkout owner on the shared artifact tree.
+            owner = ROOT.stat()
+            for path in (OUTPUT.parent, OUTPUT, *OUTPUT.rglob("*")):
+                if not path.is_symlink():
+                    os.chown(path, owner.st_uid, owner.st_gid)
+
+
+if __name__ == "__main__":
+    main()

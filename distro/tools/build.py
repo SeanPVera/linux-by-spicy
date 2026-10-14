@@ -45,6 +45,12 @@ def embedded_image(path):
     return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode()
 
 
+def progress_svg():
+    # Match the viewport to the exported strip; a square viewport letterboxes
+    # the rectangle and leaves most of the progress track transparent.
+    return svg('<rect width="64" height="8" rx="2" fill="#C56724"/>', 64, 8)
+
+
 def wallpaper(kind, size):
     """Compose within a shared safe area; never stretch the cat for an aspect ratio."""
     width, height = size
@@ -164,7 +170,7 @@ def build_artwork(dest):
         write(folder / "metadata.json", json.dumps({"KPlugin":{"Id":folder.name,"Name":title,"License":"GPL-2.0-only","Authors":[{"Name":"Spicy Linux"}]},"KPackageStructure":"Wallpaper/Images"}, indent=2))
         for width, height in WALLPAPER_SIZES:
             png(wallpaper(kind, (width,height)), folder / f"contents/images/{width}x{height}.png")
-    png(svg('<rect width="64" height="64" rx="8" fill="#C56724"/>'), art / "progress.png", 64, 8)
+    png(progress_svg(), art / "progress.png", 64, 8)
 
 
 def color_scheme(dark):
@@ -244,8 +250,15 @@ def build_desktop(dest, scratch):
             target = dest / file.relative_to(ROOT / "theme/files")
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(file,target)
+    # Debian's Plymouth initramfs hook preserves assets inside the theme's own
+    # directory. An external ImageDir is copied to a different path, leaving
+    # early boot unable to find the portrait. Keep only the boot assets here.
+    boot_art = dest / "usr/share/plymouth/themes/spicy"
+    shutil.copy2(ROOT / "artwork/portrait.png", boot_art / "portrait.png")
+    png(progress_svg(), boot_art / "progress.png", 64, 8)
     qml = dest / "usr/share/spicy/qml"
     shutil.copytree(ROOT / "theme/qml",qml,dirs_exist_ok=True)
+    shutil.copytree(ROOT / "hardware", dest / "usr/share/spicy/hardware", dirs_exist_ok=True)
     for script in (ROOT / "scripts").iterdir():
         if script.name.startswith("spicy-"):
             target = dest / "usr/bin" / script.name

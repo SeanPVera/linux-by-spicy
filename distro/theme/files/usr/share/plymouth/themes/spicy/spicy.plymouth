@@ -4,5 +4,5 @@ Description=Spicy portrait and a warm progress bar
 ModuleName=script
 
 [script]
-ImageDir=/usr/share/spicy/artwork
+ImageDir=/usr/share/plymouth/themes/spicy
 ScriptFile=/usr/share/plymouth/themes/spicy/spicy.script

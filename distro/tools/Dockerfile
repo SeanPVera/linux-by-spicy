@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     qml6-module-qt5compat-graphicaleffects xvfb xauth dbus-x11 qt6-style-kvantum \
     live-build debootstrap xorriso squashfs-tools dosfstools mtools \
     isolinux syslinux-common grub-pc-bin grub-efi-amd64-bin \
-    qemu-system-x86 ovmf \
+    qemu-system-x86 ovmf plymouth plymouth-themes plymouth-x11 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 RUN apt-get update && apt-get install -y --no-install-recommends libqt6svg6 qt6-svg-plugins dbus-bin \

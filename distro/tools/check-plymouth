@@ -79,7 +79,13 @@ def render(source, width, height, scale, work):
     try:
         assert select.select([xvfb.stdout], [], [], 10)[0], "Xvfb did not become ready"
         env["DISPLAY"] = ":" + xvfb.stdout.readline().strip()
+        # Docker exposes the host's active consoles through /sys. A serial
+        # console otherwise forces details mode before the X11 renderer is
+        # created, leaving Xvfb blank on some CI hosts. Select graphical boot
+        # explicitly for this isolated renderer check; it also ignores those
+        # host consoles. The distribution's real boot options stay unchanged.
         daemon = subprocess.Popen(["plymouthd", "--no-daemon", "--mode=boot", "--no-boot-log",
+                                   "--graphical-boot",
                                    "--debug", f"--debug-file={OUTPUT / (name + '.log')}",
                                    f"--pid-file={work / 'plymouth.pid'}",
                                    "--kernel-command-line=quiet splash"], env=env,
@@ -131,7 +137,7 @@ def render(source, width, height, scale, work):
             log.chmod(0o644)
             if failure is not None:
                 relevant = [line for line in log.read_text(errors="replace").splitlines()
-                            if re.search(r"renderer|display|theme|script|image|failed|error|fallback",
+                            if re.search(r"renderer|display|theme|script|image|console|failed|error|fallback",
                                          line, re.IGNORECASE)]
                 print(f"Plymouth {name} failed: {failure}", flush=True)
                 print("\n".join(relevant[-45:]), flush=True)

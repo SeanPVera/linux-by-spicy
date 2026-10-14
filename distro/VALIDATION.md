@@ -41,13 +41,20 @@ through its real script/X11 plugins under Xvfb: 20 captures across ten
 resolutions through 3840×2160 at integer device scales 1× and 2× passed portrait
 matching and continuous progress-track checks. This is independent of Plasma's
 fractional scaling checks and does not certify DRM or hardware boot rendering.
+The renderer harness explicitly requests graphical boot, including on CI hosts
+whose active serial console otherwise makes Plymouth wait in text mode. The
+same 20 cases pass with a simulated serial-console host.
 
 The [VM launcher](VM_VALIDATION.md) records the exact ISO and firmware hashes,
 disposable boot profile and timed QMP captures. The
 [guest evidence collector](hardware/README.md) records actual session/renderer
 observations and explicit missing or failed probes. All 18 functional checks and
 80 scale/theme cases start untested. ISO builds regenerate local packages so
-an existing `.deb` cannot silently omit source fixes.
+an existing `.deb` cannot silently omit source fixes. After bootstrap cleanup,
+the build runs the remaining live-build stages directly so a second cache
+restore cannot reintroduce the temporary release-identity diversion. Disposable
+package checks also verify that foreign diversions remain intact on a refused
+installation and removal.
 
 ## Live-image observations
 

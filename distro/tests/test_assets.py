@@ -81,11 +81,13 @@ def test_normal_text_and_selection_contrast():
     for name in ("SpicyDaylight","SpicyNightProwl"):
         cfg=configparser.ConfigParser()
         cfg.read(STAGE/f"spicy-desktop/usr/share/color-schemes/{name}.colors")
-        for group in ("View","Window","Button","Tooltip","Selection"):
+        for group in ("View","Window","Button","Tooltip","Selection","Complementary"):
             section=cfg["Colors:"+group]
             a,b=[luminance(tuple(map(int,section[key].split(",")))) for key in ("BackgroundNormal","ForegroundNormal")]
             ratio=(max(a,b)+.05)/(min(a,b)+.05)
             assert ratio>=4.5,(name,group,ratio)
+            if group=="Complementary":
+                assert a < .08 and b > .8, "The lock screen needs light text over its dark wallpaper"
 
 
 def test_selected_screen_sequence_and_font_are_preserved():

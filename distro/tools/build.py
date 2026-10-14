@@ -173,7 +173,15 @@ def color_scheme(dark):
     title = "Spicy Night Prowl" if dark else "Spicy Daylight"
     text = f"[General]\nName={title}\nColorScheme={title.replace(' ','')}\n\n[KDE]\ncontrast=4\n\n"
     for group, surface in (("View",view),("Window",bg),("Button",alt),("Tooltip",view),("Complementary",bg),("Header",bg)):
-        text += f"[Colors:{group}]\nBackgroundNormal={surface}\nBackgroundAlternate={alt}\nForegroundNormal={fg}\nForegroundInactive={'182,185,180' if dark else '93,100,100'}\nForegroundLink={accent}\nForegroundVisited=128,92,136\nForegroundNegative={'242,151,163' if dark else '170,42,60'}\nForegroundNeutral={'243,187,122' if dark else '129,88,26'}\nForegroundPositive={'172,196,154' if dark else '55,105,65'}\nDecorationFocus={accent}\nDecorationHover={accent}\n\n"
+        # Breeze's lock screen uses Complementary text over a darkened
+        # wallpaper, including when the desktop itself uses Daylight.
+        surface_dark = dark or group == "Complementary"
+        group_fg = "244,239,231" if group == "Complementary" else fg
+        group_alt = "37,47,52" if group == "Complementary" else alt
+        group_accent = "243,187,122" if group == "Complementary" else accent
+        if group == "Complementary":
+            surface = "21,28,32"
+        text += f"[Colors:{group}]\nBackgroundNormal={surface}\nBackgroundAlternate={group_alt}\nForegroundNormal={group_fg}\nForegroundInactive={'182,185,180' if surface_dark else '93,100,100'}\nForegroundLink={group_accent}\nForegroundVisited=128,92,136\nForegroundNegative={'242,151,163' if surface_dark else '170,42,60'}\nForegroundNeutral={'243,187,122' if surface_dark else '129,88,26'}\nForegroundPositive={'172,196,154' if surface_dark else '55,105,65'}\nDecorationFocus={group_accent}\nDecorationHover={group_accent}\n\n"
     text += f"[Colors:Selection]\nBackgroundNormal={accent}\nBackgroundAlternate={accent}\nForegroundNormal={selected}\nForegroundInactive={selected}\n\n[WM]\nactiveBackground={bg}\nactiveForeground={fg}\ninactiveBackground={bg}\ninactiveForeground={'182,185,180' if dark else '93,100,100'}\n"
     text += "\n[ColorEffects:Disabled]\nColor=112,111,108\nColorAmount=0\nColorEffect=0\nContrastAmount=0.65\nContrastEffect=1\nIntensityAmount=0.1\nIntensityEffect=2\n\n[ColorEffects:Inactive]\nEnable=false\n"
     return text

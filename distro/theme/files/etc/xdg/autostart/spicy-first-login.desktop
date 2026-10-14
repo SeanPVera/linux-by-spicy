@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Spicy first login
+Exec=spicy-first-login
+Icon=spicy-linux
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2

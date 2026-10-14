@@ -1,0 +1,9 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+set -eu
+work=/tmp/spicy-live-config
+mkdir -p "$work"
+cp -a /src/distro/live/auto /src/distro/live/config "$work/"
+cd "$work"
+lb config
+lb config --validate

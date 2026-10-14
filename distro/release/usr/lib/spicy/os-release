@@ -1,0 +1,11 @@
+PRETTY_NAME="Spicy Linux 0.1 Alpha"
+NAME="Spicy Linux"
+VERSION_ID="0.1"
+VERSION="0.1 Alpha (Debian 13 trixie)"
+ID=spicy
+ID_LIKE=debian
+VERSION_CODENAME=trixie
+HOME_URL="https://github.com/SeanPVera/linux-by-spicy"
+SUPPORT_URL="https://github.com/SeanPVera/linux-by-spicy/issues"
+BUG_REPORT_URL="https://github.com/SeanPVera/linux-by-spicy/issues"
+LOGO=spicy-linux

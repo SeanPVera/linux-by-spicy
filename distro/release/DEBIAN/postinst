@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+if [ "$1" = configure ]; then
+    owner="$(dpkg-divert --listpackage /etc/os-release)"
+    if [ -n "$owner" ] && [ "$owner" != spicy-release ]; then
+        echo 'Another package already manages /etc/os-release through a diversion.' >&2
+        exit 1
+    fi
+    if [ -z "$owner" ]; then
+        dpkg-divert --package spicy-release --add --rename --divert /etc/os-release.debian /etc/os-release
+        ln -s /usr/lib/spicy/os-release /etc/os-release
+    elif [ ! -e /etc/os-release ] && [ ! -L /etc/os-release ]; then
+        ln -s /usr/lib/spicy/os-release /etc/os-release
+    fi
+fi

@@ -1,0 +1,122 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: GPL-2.0-only
+import configparser
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+from PySide6.QtCore import QObject, Property, QProcess, Signal, Slot, QUrl
+from PySide6.QtGui import QFont, QGuiApplication
+from PySide6.QtQml import QQmlApplicationEngine
+
+DATA = Path(os.environ.get("SPICY_DATA_DIR", "/usr/share/spicy"))
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+
+
+class Backend(QObject):
+    changed = Signal()
+
+    def __init__(self, preview=False):
+        super().__init__()
+        self.preview = preview
+        self.process = None
+        self._theme = "daylight"
+        self._motion = False
+        self._busy = False
+        self._status = "Pick a look, explore your desktop, and make yourself at home."
+        settings = configparser.ConfigParser(interpolation=None)
+        settings.read(CONFIG / "spicyrc")
+        self._theme = settings.get("Appearance", "Theme", fallback="daylight")
+        self._motion = settings.getboolean("Appearance", "ReducedMotion", fallback=False)
+
+    @Property(str, notify=changed)
+    def currentTheme(self):
+        return self._theme
+
+    @Property(bool, notify=changed)
+    def reducedMotion(self):
+        return self._motion
+
+    @Property(bool, notify=changed)
+    def busy(self):
+        return self._busy
+
+    @Property(str, notify=changed)
+    def status(self):
+        return self._status
+
+    def run(self, arguments, success, on_success=None):
+        if self._busy:
+            return
+        if self.preview:
+            if on_success:
+                on_success()
+            self._status = success
+            self.changed.emit()
+            return
+        self._busy = True
+        self._status = "Getting comfortable…"
+        self.changed.emit()
+        self.process = QProcess(self)
+        def finished(code, _status):
+            self._busy = False
+            if code == 0 and on_success:
+                on_success()
+            self._status = success if code == 0 else "Couldn't apply that setting. You can also change it in System Settings."
+            self.changed.emit()
+            self.process.deleteLater()
+            self.process = None
+        self.process.finished.connect(finished)
+        def failed(_error):
+            if self._busy:
+                self._busy = False
+                self._status = "Couldn't open the appearance tool. Try System Settings."
+                self.changed.emit()
+        self.process.errorOccurred.connect(failed)
+        self.process.start("spicy-appearance", arguments)
+
+    @Slot(str)
+    def setTheme(self, name):
+        if name not in ("daylight", "night-prowl"):
+            return
+        self.run(["--theme", name], "Your desktop is ready.", lambda: setattr(self, "_theme", name))
+
+    @Slot(bool)
+    def setReducedMotion(self, value):
+        self.run(["--reduced-motion", "on" if value else "off"], "Motion preference updated.", lambda: setattr(self, "_motion", value))
+
+    def open(self, args):
+        if not self.preview:
+            subprocess.Popen(args, start_new_session=True)
+
+    @Slot()
+    def openSettings(self):
+        self.open(["systemsettings"])
+
+    @Slot()
+    def openFiles(self):
+        self.open(["xdg-open", str(Path.home())])
+
+    @Slot()
+    def openGuide(self):
+        self.open(["xdg-open", "https://github.com/SeanPVera/linux-by-spicy/blob/spicy-distro/README.md"])
+
+
+def main():
+    app = QGuiApplication(sys.argv)
+    app.setApplicationName("Spicy Welcome")
+    app.setOrganizationName("SpicyLinux")
+    app.setFont(QFont("Atkinson Hyperlegible", 11))
+    backend = Backend("--preview" in sys.argv)
+    engine = QQmlApplicationEngine()
+    engine.rootContext().setContextProperty("backend", backend)
+    engine.rootContext().setContextProperty("spicyArtwork", QUrl.fromLocalFile(str(DATA / "artwork") + "/").toString())
+    engine.load(QUrl.fromLocalFile(str(DATA / "qml/Welcome.qml")))
+    if not engine.rootObjects():
+        return 1
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

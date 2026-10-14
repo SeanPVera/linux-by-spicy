@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+plymouth-set-default-theme spicy
+update-initramfs -u -k all
+systemctl enable sddm.service

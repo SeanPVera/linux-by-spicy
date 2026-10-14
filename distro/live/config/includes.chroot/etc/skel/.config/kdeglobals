@@ -1,0 +1,11 @@
+[KDE]
+LookAndFeelPackage=org.spicy.daylight.desktop
+widgetStyle=kvantum
+
+[General]
+ColorScheme=SpicyDaylight
+font=Atkinson Hyperlegible,10,-1,5,50,0,0,0,0,0
+smallestReadableFont=Atkinson Hyperlegible,9,-1,5,50,0,0,0,0,0
+
+[Icons]
+Theme=SpicySoft

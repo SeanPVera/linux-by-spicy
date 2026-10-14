@@ -1,0 +1,23 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+set -eu
+lb config noauto \
+    --mode debian \
+    --distribution trixie \
+    --architectures amd64 \
+    --binary-images iso-hybrid \
+    --archive-areas "main non-free-firmware" \
+    --bootloaders "syslinux grub-efi" \
+    --uefi-secure-boot enable \
+    --debian-installer none \
+    --apt-recommends false \
+    --security true \
+    --updates true \
+    --firmware-chroot true \
+    --firmware-binary true \
+    --checksums sha256 \
+    --iso-application "Spicy Linux Live Alpha" \
+    --iso-publisher "Spicy Linux" \
+    --iso-volume "SPICY_LIVE_ALPHA" \
+    --bootappend-live "boot=live components quiet splash username=spicy hostname=spicy-linux locales=en_US.UTF-8 keyboard-layouts=us" \
+    "$@"

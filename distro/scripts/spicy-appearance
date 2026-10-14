@@ -1,0 +1,58 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: GPL-2.0-only
+"""Apply explicit user-selected appearance settings without resetting panel layouts."""
+import argparse
+import json
+import subprocess
+
+
+def commands(theme=None, reduced=None):
+    result = []
+    def config(file, groups, key, value):
+        command = ["kwriteconfig6", "--file", file]
+        for group in groups:
+            command += ["--group", group]
+        result.append(command + ["--key", key, value])
+    if theme:
+        suffix = "NightProwl" if theme == "night-prowl" else "Daylight"
+        result += [["plasma-apply-lookandfeel", "--apply", "org.spicy." + theme + ".desktop"],
+                   ["plasma-apply-colorscheme", "Spicy" + suffix],
+                   ["plasma-apply-cursortheme", "SpicyLittleTip"]]
+        config("Kvantum/kvantum.kvconfig", ["General"], "theme", "Spicy" + suffix)
+        config("kdeglobals", ["KDE"], "widgetStyle", "kvantum")
+        config("kdeglobals", ["Icons"], "Theme", "SpicySoft")
+        for key in ("font", "menuFont", "toolBarFont", "taskbarFont"):
+            config("kdeglobals", ["General"], key, "Atkinson Hyperlegible,10,-1,5,50,0,0,0,0,0")
+        config("kdeglobals", ["General"], "smallestReadableFont", "Atkinson Hyperlegible,9,-1,5,50,0,0,0,0,0")
+        config("kwinrc", ["Plugins"], "blurEnabled", "true")
+        config("kscreenlockerrc", ["Greeter"], "WallpaperPlugin", "org.kde.image")
+        config("kscreenlockerrc", ["Greeter", "Wallpaper", "org.kde.image", "General"], "Image", "file:///usr/share/wallpapers/SpicySleeping/contents/images/3840x2160.png")
+        config("ksplashrc", ["KSplash"], "Theme", "org.spicy." + theme + ".desktop")
+        config("ksplashrc", ["KSplash"], "Engine", "KSplashQML")
+        config("spicyrc", ["Appearance"], "Theme", theme)
+        wallpaper = "file:///usr/share/wallpapers/Spicy" + suffix + "/contents/images/3840x2160.png"
+        script = 'var all = desktops(); for (var i=0; i<all.length; ++i) { all[i].wallpaperPlugin="org.kde.image"; all[i].currentConfigGroup=["Wallpaper","org.kde.image","General"]; all[i].writeConfig("Image",' + json.dumps(wallpaper) + '); }'
+        result.append(["dbus-send", "--session", "--print-reply", "--dest=org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell.evaluateScript", "string:" + script])
+        result.append(["dbus-send", "--session", "--print-reply", "--dest=org.kde.KWin", "/KWin", "org.kde.KWin.reconfigure"])
+    if reduced is not None:
+        config("spicyrc", ["Appearance"], "ReducedMotion", "true" if reduced else "false")
+        config("kdeglobals", ["KDE"], "AnimationDurationFactor", "0" if reduced else "1")
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--theme", choices=("daylight", "night-prowl"))
+    parser.add_argument("--reduced-motion", choices=("on", "off"))
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+    actions = commands(args.theme, None if args.reduced_motion is None else args.reduced_motion == "on")
+    if args.dry_run:
+        print(json.dumps(actions, indent=2))
+        return
+    for action in actions:
+        subprocess.run(action, check=True)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,16 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+# Run only in a disposable container, never on the host.
+set -eu
+[ -f /.dockerenv ] || { echo 'Use a disposable container for the release-package check.' >&2; exit 1; }
+original_link="$(readlink /etc/os-release)"
+original_content="$(cat /etc/os-release)"
+dpkg -i /src/distro/dist/spicy-release_0.1.0~alpha1_all.deb
+[ "$(readlink /etc/os-release)" = /usr/lib/spicy/os-release ]
+grep -q '^ID=spicy$' /etc/os-release
+dpkg -i /src/distro/dist/spicy-release_0.1.0~alpha1_all.deb
+grep -q '^ID=spicy$' /etc/os-release
+dpkg --purge spicy-release
+[ "$(readlink /etc/os-release)" = "$original_link" ]
+[ "$(cat /etc/os-release)" = "$original_content" ]
+printf '%s\n' 'Release identity: install, reinstall and removal restore Debian correctly.'

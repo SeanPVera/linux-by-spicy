@@ -1,0 +1,92 @@
+{
+  "project": "Spicy Linux",
+  "status": "Art direction selected by user",
+  "visual_board": "selected-direction.png",
+  "choices": {
+    "logo": {
+      "code": "1A",
+      "name": "Portrait Signature",
+      "direction": "Approved faithful Spicy portrait beside a clean Spicy Linux wordmark."
+    },
+    "typography": {
+      "code": "2C",
+      "name": "Readability First",
+      "font": "Atkinson Hyperlegible",
+      "direction": "Use the actual font files for production typography."
+    },
+    "signature_patterns": {
+      "code": "3C",
+      "name": "Beans & Hearts",
+      "direction": "Sparse pink toe-bean and red heart-tag details."
+    },
+    "system_icons": {
+      "code": "4B",
+      "name": "Soft Illustrations",
+      "direction": "Softly shaded utility icons with ginger, ivory and restrained Spicy details."
+    },
+    "windows_and_controls": {
+      "code": "5C",
+      "name": "Soft Glass",
+      "direction": "Lightly translucent surfaces, restrained background blur and rounded controls with readable text."
+    },
+    "wallpapers": {
+      "code": "6B",
+      "name": "Faithful Illustrations",
+      "direction": "Illustrations closely following Spicy's actual photographed poses, proportions and markings."
+    },
+    "screens": {
+      "boot": {
+        "code": "7A",
+        "name": "Portrait-led",
+        "direction": "Spicy portrait with a discreet progress bar."
+      },
+      "sign_in": {
+        "code": "7C",
+        "name": "Heart-tag Identity sign-in composition",
+        "direction": "Spicy's close-up portrait beside the sign-in form; use the sign-in frame of 7C, not its heart-tag boot frame."
+      },
+      "locked": {
+        "code": "7B",
+        "name": "A Day with Spicy lock composition",
+        "direction": "Sleeping, reclining Spicy with a clear clock; use the locked frame of 7B."
+      }
+    },
+    "illustrations_and_motion": {
+      "code": "8C",
+      "name": "Playful Details",
+      "direction": "Curious peeks, gentle paw presses and toe-bean pulses, with a reduced-motion alternative."
+    }
+  },
+  "existing_decisions": {
+    "identity": "Spicy the actual ginger short-haired cat; preserve his real face, eye shape, head tilt, tabby markings, white bib and socks, and red heart collar tag.",
+    "themes": [
+      "Daylight",
+      "Night Prowl"
+    ],
+    "dark_theme": "Deep slate background and dark panel with warm ginger accents.",
+    "cursor": {
+      "choice": "2",
+      "name": "Little Tip",
+      "direction": "Separate triangular pointing tip ahead of a white Spicy paw with pink toe beans, with a clear gap between the silhouettes.",
+      "hotspot": "Leading tip of the triangle."
+    },
+    "scaling": "Readable and usable across common lower screen resolutions through 3840x2160, across supported aspect ratios and appropriate DPI settings. Preserve artwork proportions and prevent layout clipping.",
+    "proposed_platform": "Debian 13 with KDE Plasma"
+  },
+  "palette": {
+    "ivory": "#FAF8F2",
+    "apricot": "#F3BB7A",
+    "ginger": "#C56724",
+    "stone": "#DCD8CF",
+    "sage": "#8C9C83",
+    "ink": "#30383D",
+    "night_background": "#151C20",
+    "heart_tag": "#B93645"
+  },
+  "production_notes": [
+    "Comparison images are visual concepts, not production theme assets.",
+    "Typography must be rendered using actual Atkinson Hyperlegible font files.",
+    "Create scalable and size-appropriate assets and test the complete desktop at lower resolutions as well as 4K.",
+    "The user selected a custom 7A / 7C / 7B screen sequence, not a single complete row from sheet 7."
+  ]
+}

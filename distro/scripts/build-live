@@ -1,0 +1,23 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+set -eu
+repo="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)"
+packages="$repo/distro/dist"
+[ -f "$packages/spicy-desktop_0.1.0~alpha1_all.deb" ] || "$repo/distro/scripts/build-packages"
+docker run --rm --privileged \
+    --mount "type=bind,src=$repo,dst=/src" \
+    -e SPICY_OWNER_UID="$(id -u)" -e SPICY_OWNER_GID="$(id -g)" \
+    spicy-builder:alpha sh -eu -c '
+        work=/src/distro/build/live
+        mkdir -p "$work"
+        cp -a /src/distro/live/auto /src/distro/live/config "$work/"
+        mkdir -p "$work/config/packages.chroot"
+        cp /src/distro/dist/*.deb "$work/config/packages.chroot/"
+        cd "$work"
+        lb config
+        lb build
+        cp live-image-amd64.hybrid.iso /src/distro/dist/spicy-linux-0.1-alpha-amd64.iso
+        cd /src/distro/dist
+        sha256sum spicy-linux-0.1-alpha-amd64.iso > spicy-linux-0.1-alpha-amd64.iso.sha256
+        chown "$SPICY_OWNER_UID:$SPICY_OWNER_GID" spicy-linux-0.1-alpha-amd64.iso*
+    '

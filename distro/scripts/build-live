@@ -15,6 +15,17 @@ docker run --rm --privileged \
         cp /src/distro/dist/*.deb "$work/config/packages.chroot/"
         cd "$work"
         lb config
+        lb bootstrap
+        # debootstrap temporarily diverts os-release. live-build normally
+        # removes this in chroot_hacks, after local packages are configured;
+        # release identity packages need the normal path before that stage.
+        if [ "$(chroot chroot dpkg-divert --listpackage /etc/os-release)" = LOCAL ] &&
+           [ "$(chroot chroot dpkg-divert --truename /etc/os-release)" = /etc/os-release.debootstrap ]; then
+            chroot chroot dpkg-divert --local --remove --no-rename /etc/os-release
+            if [ -e chroot/etc/os-release.debootstrap ] || [ -L chroot/etc/os-release.debootstrap ]; then
+                mv -f chroot/etc/os-release.debootstrap chroot/etc/os-release
+            fi
+        fi
         lb build
         cp live-image-amd64.hybrid.iso /src/distro/dist/spicy-linux-0.1-alpha-amd64.iso
         cd /src/distro/dist

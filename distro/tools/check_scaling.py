@@ -11,7 +11,7 @@ from pathlib import Path
 import sys
 import time
 
-from PySide6.QtCore import QAbstractListModel, QModelIndex, QObject, Property, Qt, QUrl, Signal, Slot
+from PySide6.QtCore import QAbstractListModel, QCoreApplication, QEvent, QModelIndex, QObject, Property, Qt, QUrl, Signal, Slot
 from PySide6.QtGui import QFont, QFontDatabase, QFontInfo, QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
@@ -160,6 +160,9 @@ def main():
     settle(app)
     assert password.property("text")=="", "A failed sign-in must clear the password field"
     greeter_window.close()
+    for instance in (greeter_window, greeter_engine, engine):
+        instance.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
     serious=[x for x in warnings if any(s in x for s in ("ReferenceError","TypeError","is not a type","is not installed","Binding loop","Error decoding","Cannot open:"))]
     assert not serious,"\n".join(serious)
     report={"font":QFontInfo(app.font()).family(),"cases":checked,"qml_warnings":warnings,"sign_in_qml_loaded":True}

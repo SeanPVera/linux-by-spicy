@@ -7,6 +7,9 @@ Distribution development lives under `distro/` on the `spicy-distro` branch.
 The existing Linux kernel source tree is retained; the live image uses Debian's
 supported packaged kernel.
 
+The delivery milestones and acceptance criteria are in
+[the distribution roadmap](distro/ROADMAP.md).
+
 ## First desktop alpha
 
 - Daylight and Night Prowl color schemes, with a genuinely dark Night Prowl.

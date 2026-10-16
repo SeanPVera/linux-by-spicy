@@ -208,6 +208,66 @@ Repeat this exact digest on a capable KVM/VirGL host, with a visible interactive
 display, before physical validation. The renderer defaults and approved artwork
 remain unchanged; a software-only stall does not justify a driver-support claim.
 
+## Parallels ARM64 installed-desktop follow-up
+
+A user-supplied archive records an approved local desktop test on 2026-10-15
+at 20:55:02–20:55:21 America/New_York (2026-10-16 UTC). The reported setup is
+Debian 13.7 ARM64 in Parallels with `spicy-artwork` and `spicy-desktop`
+`0.1.0~alpha1` installed. This is separate installed-package evidence. The
+archive does not identify the installed package hashes, source commit or a
+Spicy ISO digest, so it cannot certify the amd64 live image above.
+
+The [reviewed ARM desktop summary](validation/2026-10-15-parallels-arm64.json)
+retains the supplied archive/file hashes, command outcomes and review limits.
+The supplied script was read without execution; its reports, journal extracts,
+KWin responses and all four screenshots were inspected. Raw evidence contains
+private desktop contents and identifiers and remains outside the repository.
+
+KWin's own responses before and after each switch confirm KWin 6.3.6,
+Qt 6.8.2, Wayland, DRM/EGL/OpenGL, Mesa 25.0.7 and
+`virgl (Apple M4 (Compat))`. The active output is 1920×1080 at 100% scaling,
+60 Hz. This establishes the compositor renderer for this ARM setup; it is
+separate from the earlier software guest's 105% scaling and llvmpipe result.
+
+The `spicy-appearance` Daylight → Night Prowl → Daylight sequence returned 0
+for all three requests. Saved preferences and color schemes match each stage.
+All four captures and four KWin queries returned 0. Screenshots show the
+wallpaper, browser and file-manager palettes changing and returning to Daylight,
+with existing windows and the panel retained. This narrow CLI/visual smoke
+cycle completed. The Welcome application's controls were not exercised.
+
+Two appearance discrepancies remain:
+
+- Konsole's toolbar/tab strip is dark in Daylight and light in Night Prowl,
+  following the preceding selection. The terminal text area's dark profile is
+  a separate observation. Successful command exits do not establish a complete
+  application refresh.
+- All four KWin responses report `breeze_cursors`, size 24. The approved Spicy
+  paw was not established as the active cursor, and pointer shape/hotspot checks
+  were not performed. The screenshots omit the pointer.
+
+The scripted window lasted 18.968097 seconds, including three five-second
+settling waits. Per-command finish times were not recorded. No new KWin unit
+journal entries appeared during that interval. Five `GL_INVALID_OPERATION`
+messages from `glDrawBuffers` at 20:52:22 and a 30 ms input-processing warning
+at 20:48:40 predate the cycle and remain unresolved observations. The short
+interval and still images cannot establish animation smoothness, input latency,
+absence of transient stalls or sustained graphics stability.
+
+The sole nonzero scripted command was `loginctl show-session self`: the runner
+was outside the login session's process scope. Live Wayland evidence comes from
+KWin. Earlier sandbox-denied screenshot attempts are distinct from this approved
+run and are not counted as installed-desktop failures.
+
+The next targeted checks should record the installed helper hash, saved cursor
+and Kvantum settings, and Konsole's per-application color-scheme setting, then
+compare existing and newly opened Qt windows after switching. The palette
+ordering hypothesis needs reproduction before changing the helper. Welcome UI
+operation, reduced motion, lock/unlock, sign-out persistence, application
+interaction, sustained use in both themes and the remaining scaling matrix are
+still untested for this ARM setup. Full boot identity and the exact amd64 ISO's
+accelerated campaign remain separate gates.
+
 ## Remaining release gates
 
 The earlier software-only VM produced KWin rendering stalls and D-Bus timeouts;

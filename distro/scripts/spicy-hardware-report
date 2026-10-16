@@ -1,0 +1,440 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
+"""Collect limited live-session diagnostics and an explicitly untested matrix."""
+
+import argparse
+from datetime import datetime, timezone
+import hashlib
+import json
+import os
+from pathlib import Path
+import platform
+import re
+import shutil
+import subprocess
+import sys
+
+
+VM_PROFILE_FIELDS = {
+    "hypervisor", "hypervisor_version", "machine", "cpu", "firmware",
+    "firmware_version", "graphics", "memory_mib", "acceleration",
+}
+PACKAGES = (
+    "spicy-artwork", "spicy-desktop", "spicy-release", "linux-image-amd64",
+    "plasma-workspace", "kwin-wayland", "kwin-x11", "sddm", "plymouth",
+    "libgl1-mesa-dri", "mesa-vulkan-drivers", "pipewire", "wireplumber",
+    "network-manager", "bluez", "shim-signed", "grub-efi-amd64-signed",
+    "firmware-iwlwifi", "firmware-realtek", "firmware-amd-graphics",
+    "firmware-misc-nonfree",
+)
+KWIN_FIELDS = {
+    "KWin version", "Qt Version", "Qt compile version", "Operation Mode",
+    "Platform", "Compositing Type", "OpenGL vendor string",
+    "OpenGL renderer string", "OpenGL version string",
+    "OpenGL shading language version string", "Driver", "GPU class",
+    "OpenGL version", "GLSL version", "Mesa version", "Virtual Machine",
+}
+GL_FIELDS = {
+    "direct rendering", "OpenGL vendor string", "OpenGL renderer string",
+    "OpenGL core profile version string", "OpenGL version string",
+}
+RENDERER_OVERRIDE_FIELDS = ("KWIN_COMPOSE", "LIBGL_ALWAYS_SOFTWARE", "QT_QUICK_BACKEND")
+RESOLUTIONS = (
+    (1024, 768), (1280, 720), (1280, 800), (1366, 768), (1920, 1080),
+    (1920, 1200), (2560, 1440), (2560, 1600), (3440, 1440), (3840, 2160),
+)
+CASES = (
+    ("image_boot", "Confirm this exact image booted; UEFI reaches a usable Wayland desktop."),
+    ("plymouth_portrait", "Cold boot shows the approved portrait and progress bar without distortion."),
+    ("sign_in_lock", "Sign out/in and lock/unlock succeed; approved 7C sign-in and 7B lock render."),
+    ("graphics_daylight", "At least 30 minutes in Daylight: welcome, switching apps, blur, cursor and video without stalls."),
+    ("graphics_night_prowl", "Repeat in Night Prowl; no stalls, corrupt frames, lost input or unreadable controls."),
+    ("theme_persistence", "Theme and reduced-motion choices survive sign-out/in; both appearance switches finish."),
+    ("secure_boot", "Firmware-enforced Secure Boot boots this exact image; firmware state and guest evidence agree."),
+    ("wifi", "Connect, reconnect and transfer data using the intended wireless device."),
+    ("bluetooth", "Pair, use, disconnect and reconnect a peripheral using the intended controller."),
+    ("audio", "Speaker/headphone playback, microphone capture and device switching work."),
+    ("webcam", "Preview and capture work, including reopening the camera in a second session."),
+    ("suspend_resume", "Five suspend/resume cycles retain graphics, input, network and audio; test AC and battery where applicable."),
+    ("battery_power", "Battery/charging indicators and brightness controls behave correctly on the intended laptop."),
+    ("external_display", "Hotplug/unplug and reconnect an external display; primary-screen and window placement remain usable."),
+    ("mixed_dpi", "Two displays at different scales retain readable controls and accurate cursor clicks after moving windows."),
+    ("applications", "Use Qt (Dolphin/Kate), a recorded GTK app and Firefox ESR; dialogs, text and playback remain usable."),
+    ("accessibility", "Keyboard navigation, visible focus, contrast and a recorded screen-reader flow work."),
+    ("reduced_motion", "Reduced motion can be enabled; decorative motion stops while controls remain responsive."),
+)
+
+
+def utc_now():
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def read_text(path):
+    try:
+        with Path(path).open("r", encoding="utf-8", errors="replace") as stream:
+            return stream.read(65536).strip()
+    except OSError:
+        return None
+
+
+def command(argv, timeout=8, accepted=(0,)):
+    """Never retain raw errors: they can contain paths or session identities."""
+    executable = shutil.which(argv[0])
+    if executable is None:
+        return {"status": "missing_command", "command": argv[0]}, None
+    env = os.environ.copy()
+    env["LC_ALL"] = "C"
+    try:
+        result = subprocess.run(
+            [executable, *argv[1:]], capture_output=True, text=True,
+            errors="replace", timeout=timeout, env=env, check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {"status": "timeout", "command": argv[0], "timeout_seconds": timeout}, None
+    except OSError:
+        return {"status": "execution_error", "command": argv[0]}, None
+    status = "ok" if result.returncode == 0 else "partial" if result.returncode in accepted else "failed"
+    probe = {"status": status, "command": argv[0], "returncode": result.returncode}
+    return probe, result.stdout if result.returncode in accepted else None
+
+
+def selected_lines(output, allowed):
+    fields = {}
+    for line in (output or "").splitlines():
+        key, separator, value = line.strip().partition(":")
+        if separator and key in allowed:
+            fields[key] = value.strip()[:512]
+    return fields
+
+
+def read_efi_variable(name):
+    path = Path("/sys/firmware/efi/efivars") / f"{name}-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+    try:
+        data = path.read_bytes()
+    except FileNotFoundError:
+        return {"status": "unavailable"}
+    except OSError:
+        return {"status": "unreadable"}
+    # efivarfs stores four attribute bytes followed by the one-byte UEFI value.
+    if len(data) != 5 or data[4] not in (0, 1):
+        return {"status": "invalid_data"}
+    return {"status": "ok", "value": data[4]}
+
+
+def secure_boot():
+    probe, output = command(["mokutil", "--sb-state"])
+    if output is not None:
+        probe["secure_boot"] = (
+            "enabled" if "SecureBoot enabled" in output else
+            "disabled" if "SecureBoot disabled" in output else "unknown"
+        )
+        probe["setup_mode_reported"] = "Platform is in Setup Mode" in output
+    return {
+        "efi_boot": Path("/sys/firmware/efi").is_dir(),
+        "secure_boot_variable": read_efi_variable("SecureBoot"),
+        "setup_mode_variable": read_efi_variable("SetupMode"),
+        "mokutil": probe,
+        "interpretation": "Observation only; requires exact-image and firmware-menu boot evidence for a pass.",
+    }
+
+
+def pci_devices():
+    devices = []
+    for path in sorted(Path("/sys/bus/pci/devices").glob("*")):
+        device_class = read_text(path / "class")
+        # Display, network and multimedia controllers; no serials or addresses.
+        if not device_class or device_class[2:4] not in ("03", "02", "04"):
+            continue
+        device = {key: read_text(path / key) for key in ("class", "vendor", "device", "subsystem_vendor", "subsystem_device", "revision")}
+        device["bus_address"] = path.name
+        driver = path / "driver"
+        device["driver"] = driver.resolve().name if driver.is_symlink() else None
+        devices.append(device)
+    return devices
+
+
+def displays():
+    probe, output = command(["kscreen-doctor", "-j"])
+    if output is not None:
+        try:
+            source = json.loads(output)
+            outputs = source["outputs"]
+            if not isinstance(outputs, list):
+                raise ValueError("outputs must be a list")
+            clean = []
+            for item in outputs:
+                # In particular do not retain the EDID, display serial or hash.
+                entry = {key: item[key] for key in ("id", "connected", "enabled", "scale", "rotation", "currentModeId") if isinstance(item.get(key), (int, float, bool))}
+                if isinstance(item.get("currentModeId"), str) and re.fullmatch(r"\d+", item["currentModeId"]):
+                    entry["currentModeId"] = item["currentModeId"]
+                if isinstance(item.get("name"), str) and re.fullmatch(r"(?:eDP|DP|HDMI|DVI|VGA|DisplayPort|Virtual|Unknown)[A-Za-z0-9_-]*", item["name"]):
+                    entry["connector"] = item["name"]
+                modes = []
+                for mode in item.get("modes", []):
+                    size = mode.get("size", {})
+                    if not isinstance(size, dict):
+                        continue
+                    dimensions = {key: size[key] for key in ("width", "height") if isinstance(size.get(key), int)}
+                    value = {"size": dimensions}
+                    if isinstance(mode.get("id"), (str, int)) and re.fullmatch(r"\d+", str(mode["id"])):
+                        value["id"] = mode["id"]
+                    if isinstance(mode.get("refreshRate"), (int, float)):
+                        value["refresh_rate_hz"] = mode["refreshRate"]
+                    modes.append(value)
+                entry["modes"] = modes
+                clean.append(entry)
+            probe["outputs"] = clean
+        except (ValueError, KeyError, TypeError, AttributeError):
+            probe["status"] = "invalid_output"
+    return probe
+
+
+def renderer_overrides(environment):
+    values = {}
+    omitted = []
+    for name in RENDERER_OVERRIDE_FIELDS:
+        value = environment.get(name)
+        if value:
+            if re.fullmatch(r"[A-Za-z0-9_-]{1,32}", value):
+                values[name] = value
+            else:
+                # Keep the field name, never a potentially private value.
+                omitted.append(name)
+    return values, omitted
+
+
+def kwin_process_environment(qdbus, proc_root=Path("/proc")):
+    """Read only the compositor serving this session, not another user's KWin."""
+    probe, output = command([
+        qdbus, "org.freedesktop.DBus", "/org/freedesktop/DBus",
+        "org.freedesktop.DBus.GetConnectionUnixProcessID", "org.kde.KWin",
+    ])
+    observation = {
+        "status": probe["status"], "pid_probe": probe, "variables": {},
+        "scope": "Allowlisted initial environment of the session D-Bus KWin owner; runtime environment changes are not captured.",
+    }
+    if output is None:
+        return observation
+    pid = output.strip()
+    if not re.fullmatch(r"[1-9][0-9]{0,9}", pid):
+        observation["status"] = "invalid_pid"
+        return observation
+    process = proc_root / pid
+    try:
+        if process.stat().st_uid != os.getuid():
+            observation["status"] = "different_user"
+            return observation
+        name = (process / "comm").read_text(encoding="ascii").strip()
+        if name not in ("kwin_wayland", "kwin_x11"):
+            observation["status"] = "unexpected_process"
+            return observation
+        with (process / "environ").open("rb") as stream:
+            data = stream.read(131073)
+    except FileNotFoundError:
+        observation["status"] = "process_unavailable"
+        return observation
+    except (OSError, UnicodeError):
+        observation["status"] = "unreadable"
+        return observation
+    if len(data) > 131072:
+        observation["status"] = "too_large"
+        return observation
+    allowed = {name.encode("ascii") for name in RENDERER_OVERRIDE_FIELDS}
+    environment = {}
+    for item in data.split(b"\0"):
+        key, separator, value = item.partition(b"=")
+        if separator and key in allowed:
+            environment[key.decode("ascii")] = value.decode("ascii", errors="replace")
+    values, omitted = renderer_overrides(environment)
+    observation.update(status="partial" if omitted else "ok", process=name,
+                       variables=values, omitted_invalid_values=omitted)
+    return observation
+
+
+def graphics():
+    qdbus = next((name for name in ("qdbus6", "qdbus-qt6", "qdbus") if shutil.which(name)), "qdbus6")
+    kwin, output = command([qdbus, "org.kde.KWin", "/KWin", "org.kde.KWin.supportInformation"])
+    if output is not None:
+        kwin["fields"] = selected_lines(output, KWIN_FIELDS)
+        if not kwin["fields"]:
+            kwin["status"] = "no_recognized_fields"
+    gl, output = command(["glxinfo", "-B"])
+    if output is not None:
+        gl["fields"] = selected_lines(output, GL_FIELDS)
+        if not gl["fields"]:
+            gl["status"] = "no_recognized_fields"
+    gl["scope"] = "GLX client only (usually XWayland); does not certify KWin's renderer."
+    connectors = []
+    for path in sorted(Path("/sys/class/drm").glob("card*-*")):
+        status = read_text(path / "status")
+        if status is not None:
+            connectors.append({"connector": path.name, "status": status, "modes": (read_text(path / "modes") or "").splitlines()})
+    overrides, omitted = renderer_overrides(os.environ)
+    return {
+        "kwin": kwin, "glx_client": gl, "kscreen": displays(),
+        "drm_connectors": connectors, "renderer_overrides": overrides,
+        "renderer_overrides_scope": "Collector process environment only; does not establish KWin's process environment.",
+        "renderer_overrides_omitted_invalid_values": omitted,
+        "kwin_process_environment": kwin_process_environment(qdbus),
+    }
+
+
+def packages():
+    probe, output = command(["dpkg-query", "-W", "-f=${Package}\t${Version}\n", *PACKAGES], accepted=(0, 1))
+    versions = {}
+    for line in (output or "").splitlines():
+        name, separator, version = line.partition("\t")
+        if separator and name in PACKAGES and version:
+            versions[name] = version
+    probe["versions"] = versions
+    probe["not_reported"] = sorted(set(PACKAGES) - set(versions))
+    return probe
+
+
+def peripherals():
+    network, output = command(["nmcli", "-t", "-f", "TYPE,STATE", "device", "status"])
+    if output is not None:
+        network["devices"] = []
+        for line in output.splitlines():
+            device_type, separator, state = line.partition(":")
+            if separator and re.fullmatch(r"[A-Za-z0-9_-]+", device_type) and re.fullmatch(r"[A-Za-z0-9_ ()-]+", state):
+                network["devices"].append({"type": device_type, "state": state})
+    rfkill = []
+    for path in sorted(Path("/sys/class/rfkill").glob("rfkill*")):
+        rfkill.append({key: read_text(path / key) for key in ("type", "soft", "hard")})
+    sound = {}
+    for service in ("pipewire.service", "wireplumber.service"):
+        probe, output = command(["systemctl", "--user", "is-active", service], accepted=(0, 3))
+        if output is not None and output.strip() in ("active", "inactive", "failed", "unknown"):
+            probe["state"] = output.strip()
+        sound[service] = probe
+    power = []
+    for path in sorted(Path("/sys/class/power_supply").glob("*")):
+        power.append({key: read_text(path / key) for key in ("type", "present", "status", "capacity", "online")})
+    return {
+        "network_manager": network, "rfkill": rfkill, "audio_services": sound,
+        "webcam_nodes": len(list(Path("/sys/class/video4linux").glob("video*"))),
+        "bluetooth_controllers": len(list(Path("/sys/class/bluetooth").glob("hci*"))),
+        "power_supplies": power,
+        "interpretation": "Presence and service state are diagnostics, not functional test results.",
+    }
+
+
+def collect():
+    os_release = {}
+    for line in (read_text("/etc/os-release") or "").splitlines():
+        key, separator, value = line.partition("=")
+        if separator and key in ("ID", "VERSION_ID", "PRETTY_NAME"):
+            os_release[key] = value.strip('"')
+    dmi_fields = ("sys_vendor", "product_name", "product_version", "bios_vendor", "bios_version", "bios_date")
+    dmi = {field: read_text(Path("/sys/class/dmi/id") / field) for field in dmi_fields}
+    cpu = {}
+    for line in (read_text("/proc/cpuinfo") or "").splitlines():
+        key, separator, value = line.partition(":")
+        if separator and key.strip() in ("vendor_id", "model name"):
+            cpu.setdefault(key.strip(), value.strip())
+    virtual, output = command(["systemd-detect-virt"] , accepted=(0, 1))
+    if output is not None and re.fullmatch(r"[a-z0-9-]+", output.strip()):
+        virtual["type"] = output.strip()
+    return {
+        "platform": {"kernel": platform.release(), "architecture": platform.machine(), "os_release": os_release, "dmi": dmi, "cpu": cpu, "logical_cpus": os.cpu_count(), "virtualization": virtual},
+        "session": {"type": os.environ.get("XDG_SESSION_TYPE") if os.environ.get("XDG_SESSION_TYPE") in ("wayland", "x11", "tty") else "unknown", "plasma_version": os.environ.get("KDE_SESSION_VERSION") if os.environ.get("KDE_SESSION_VERSION", "").isdigit() else None, "wayland_display_present": bool(os.environ.get("WAYLAND_DISPLAY")), "x_display_present": bool(os.environ.get("DISPLAY"))},
+        "pci_controllers": pci_devices(), "graphics": graphics(),
+        "secure_boot": secure_boot(), "packages": packages(), "peripherals": peripherals(),
+    }
+
+
+def results_template(image, kind, label):
+    def case(identifier, criterion, **extra):
+        return {"id": identifier, "criterion": criterion, "status": "untested", "observed_at_utc": None, "notes": "", "evidence": [], **extra}
+    return {
+        "schema_version": 1, "image": image, "kind": kind, "run_label": label,
+        "allowed_statuses": ["untested", "pass", "fail", "blocked", "not_applicable"],
+        "review_status": "unreviewed", "observations": "observations.json",
+        "tests": [case(identifier, criterion) for identifier, criterion in CASES],
+        "scaling": [case(
+            f"{width}x{height}-{scale}-{theme}",
+            "Desktop, welcome, sign-in/lock, Qt/GTK/browser controls remain readable; artwork keeps proportions; separate-tip paw clicks accurately.",
+            resolution=[width, height], scale_percent=scale, theme=theme,
+        ) for width, height in RESOLUTIONS for scale in (100, 125, 150, 200) for theme in ("daylight", "night-prowl")],
+    }
+
+
+def image_identity(args):
+    expected = args.expected_sha256.lower() if args.expected_sha256 else None
+    if args.iso:
+        digest = hashlib.sha256()
+        with args.iso.open("rb") as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+        actual = digest.hexdigest()
+        if expected and actual != expected:
+            raise ValueError("ISO SHA-256 differs from --expected-sha256; no report was created")
+        return {"name": args.iso.name, "sha256": actual, "digest_source": "computed_from_iso_file", "expected_digest_matches": True if expected else None, "boot_origin_confirmed": False}
+    return {"name": args.image_name, "sha256": args.iso_sha256.lower(), "digest_source": "supplied_by_tester", "expected_digest_matches": None, "boot_origin_confirmed": False}
+
+
+def vm_profile(path):
+    if path is None:
+        return {}
+    profile = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(profile, dict) or set(profile) - VM_PROFILE_FIELDS:
+        raise ValueError("VM profile must be an object containing only the documented VM fields")
+    for key, value in profile.items():
+        if key == "memory_mib":
+            if type(value) is not int or value <= 0:
+                raise ValueError("VM memory_mib must be a positive integer")
+        elif not isinstance(value, str) or not value.strip() or len(value) > 512:
+            raise ValueError(f"VM {key} must be a nonempty string of at most 512 characters")
+    return profile
+
+
+def write_json(path, data):
+    with path.open("x", encoding="utf-8") as stream:
+        os.chmod(path, 0o600)
+        json.dump(data, stream, indent=2, ensure_ascii=False, allow_nan=False)
+        stream.write("\n")
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__, epilog="See distro/hardware/README.md or /usr/share/spicy/hardware/README.md. Run as the desktop user, without sudo.")
+    image = parser.add_mutually_exclusive_group(required=True)
+    image.add_argument("--iso", type=Path, help="hash this exact ISO file before collecting")
+    image.add_argument("--iso-sha256", help="digest verified before boot; recorded as tester-supplied")
+    parser.add_argument("--expected-sha256", help="require --iso to match this release digest")
+    parser.add_argument("--image-name", help="exact ISO filename; required with --iso-sha256")
+    parser.add_argument("--kind", choices=("vm", "physical"), required=True)
+    parser.add_argument("--label", required=True, help="generic run label, without personal identifiers")
+    parser.add_argument("--vm-profile", type=Path, help="JSON allowlisted VM declarations; for --kind vm")
+    parser.add_argument("--output", type=Path, required=True, help="new directory on a persistent disk; never overwrite a run")
+    args = parser.parse_args(argv)
+    for digest in (args.iso_sha256, args.expected_sha256):
+        if digest is not None and not re.fullmatch(r"[a-fA-F0-9]{64}", digest):
+            parser.error("SHA-256 must contain exactly 64 hexadecimal characters")
+    if args.iso_sha256 and (not args.image_name or args.expected_sha256):
+        parser.error("--iso-sha256 requires --image-name; --expected-sha256 requires --iso")
+    if args.vm_profile and args.kind != "vm":
+        parser.error("--vm-profile requires --kind vm")
+    if args.output.exists():
+        parser.error("output directory already exists; choose a new directory to preserve prior evidence")
+    try:
+        identity = image_identity(args)
+        profile = vm_profile(args.vm_profile)
+        diagnostics = collect()
+        args.output.mkdir(parents=True, mode=0o700)
+        write_json(args.output / "observations.json", {
+            "schema_version": 1, "collected_at_utc": utc_now(), "image": identity,
+            "kind": args.kind, "run_label": args.label, "declared_vm_profile": profile,
+            "privacy": {"omitted": ["hostname", "login_name", "machine_id", "system_uuid", "hardware_serials", "MAC_addresses", "IP_addresses", "SSID", "EDID", "raw_logs", "raw_command_errors"], "note": "Review user-supplied labels/profile and captured screenshots before sharing."},
+            "diagnostics": diagnostics,
+        })
+        write_json(args.output / "results.json", results_template(identity, args.kind, args.label))
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
+    print(f"Saved {args.output / 'observations.json'} and {args.output / 'results.json'}")
+    print("Every functional check is untested. Record actual evidence and review before claiming support.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

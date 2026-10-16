@@ -1,0 +1,13 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+set -eu
+# Theme installation on another Debian machine must not overwrite its users'
+# settings. This initialization is only for the live image we build ourselves.
+[ -f /etc/spicy/live-image ] || exit 0
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/spicy"
+[ ! -f "$state_dir/initialized" ] || exit 0
+# The live user's defaults already come from /etc/skel. Reapplying them here
+# races Plasma's startup and can delay the welcome app on slower machines.
+mkdir -p "$state_dir"
+touch "$state_dir/initialized"
+exec spicy-welcome

@@ -1,0 +1,33 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: GPL-2.0-only
+"""Brand the generated menus after bootloader assembly, before checksumming."""
+from pathlib import Path
+import shutil
+
+background = Path("../config/spicy-menu.png")
+for directory in (Path("boot/grub"), Path("isolinux")):
+    if directory.is_dir():
+        shutil.copyfile(background, directory / "splash.png")
+
+for path in (Path("boot/grub/grub.cfg"), Path("isolinux/live.cfg")):
+    if path.exists():
+        text = path.read_text().replace("Live system (amd64 fail-safe mode)", "Spicy Linux (safe graphics)")
+        text = text.replace("Live system (amd64)", "Try Spicy Linux")
+        text = text.replace("boot=live components memtest", "boot=live components username=spicy hostname=spicy-linux locales=en_US.UTF-8 keyboard-layouts=us memtest")
+        text = text.replace("username=spicy hostname=", "username=spicy user-fullname=Spicy hostname=")
+        path.write_text(text)
+
+config = Path("boot/grub/config.cfg")
+if config.exists():
+    config.write_text(config.read_text() + "\nset timeout_style=menu\nset timeout=8\n")
+
+theme = Path("boot/grub/live-theme/theme.txt")
+if theme.exists():
+    theme.write_text(theme.read_text().replace('selected_item_color= "#ffffff"', 'selected_item_color= "#f3bb7a"').replace('fg_color = "#ffffff"', 'fg_color = "#f3bb7a"'))
+
+menu = Path("isolinux/menu.cfg")
+if menu.exists():
+    menu.write_text(menu.read_text().replace("menu title Boot menu", "menu title Spicy Linux"))
+menu = Path("isolinux/stdmenu.cfg")
+if menu.exists():
+    menu.write_text(menu.read_text().replace("#76a1d0ff", "#b3c56724"))

@@ -1,0 +1,9 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+set -eu
+python3 -m pytest -q distro/tests
+desktop-file-validate distro/theme/files/usr/share/applications/spicy-welcome.desktop
+shellcheck distro/scripts/build-packages distro/scripts/build-live distro/scripts/spicy-first-login distro/live/auto/config distro/live/config/hooks/live/0200-spicy.hook.chroot distro/release/DEBIAN/postinst distro/release/DEBIAN/postrm distro/tools/stage-live-config distro/tools/validate-live-config
+for scale in 1 1.25 1.5 2; do
+    QT_QPA_PLATFORM=offscreen python3 distro/tools/check_scaling.py --scale "$scale"
+done

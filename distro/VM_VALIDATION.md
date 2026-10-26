@@ -158,7 +158,7 @@ This collects observations without changing the theme or taking screenshots.
 The desktop package supplies the KWin/KScreen query dependencies. Optional
 captures and fresh-window comparisons also need Spectacle and Konsole, which
 the package recommends. If recommendations were disabled, install them with
-`sudo apt install spectacle konsole`.
+`sudo apt install kde-spectacle konsole`.
 
 For the palette/cursor follow-up, leave an existing Konsole window open and run:
 

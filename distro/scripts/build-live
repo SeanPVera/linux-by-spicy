@@ -11,7 +11,13 @@ docker run --rm --privileged \
         work=/src/distro/build/live
         sh /src/distro/tools/stage-live-config "$work"
         mkdir -p "$work/config/packages.chroot"
-        cp /src/distro/dist/*.deb "$work/config/packages.chroot/"
+        # Keep earlier archives in dist, but never mix their versions into the
+        # new image or retain old local Spicy packages in the staged profile.
+        package_version="$(cat /src/distro/dist/spicy-package-version)"
+        rm -f "$work/config/packages.chroot"/spicy-*_all.deb
+        for package_name in spicy-artwork spicy-desktop spicy-release; do
+            cp "/src/distro/dist/${package_name}_${package_version}_all.deb" "$work/config/packages.chroot/"
+        done
         cd "$work"
         lb config
         # Rebuild stages together so an interrupted run cannot leave stage

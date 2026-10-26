@@ -307,8 +307,9 @@ def main():
             shutil.copy2(file,target)
     package(art,"spicy-artwork","", "Spicy the Cat artwork and wallpapers",args.output)
     deps = f"spicy-artwork (= {VERSION}), fonts-atkinson-hyperlegible, fonts-noto-core, breeze-icon-theme, breeze-cursor-theme, plasma-workspace (>= 4:6.0), kde-cli-tools, dbus-bin, qt6-style-kvantum, libqt6svg6, qt6-svg-plugins, libkscreen-bin, qdbus-qt6, python3, python3-pyside6.qtquick, python3-pyside6.qtqml, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qt5compat-graphicaleffects, plymouth, sddm"
-    package(desktop,"spicy-desktop",deps,"Spicy Daylight and Night Prowl Plasma desktop",args.output,recommends="konsole, spectacle")
+    package(desktop,"spicy-desktop",deps,"Spicy Daylight and Night Prowl Plasma desktop",args.output,recommends="konsole, kde-spectacle")
     package(release,"spicy-release","base-files, dpkg", "Spicy Linux alpha system identity",args.output)
+    write(args.output / "spicy-package-version", VERSION + "\n")
 
 
 if __name__ == "__main__":

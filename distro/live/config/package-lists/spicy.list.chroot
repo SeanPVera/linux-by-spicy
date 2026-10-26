@@ -14,7 +14,7 @@ xserver-xorg
 xwayland
 dolphin
 konsole
-spectacle
+kde-spectacle
 kate
 systemsettings
 firefox-esr

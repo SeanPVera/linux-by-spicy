@@ -1,0 +1,50 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+set -eu
+repo="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)"
+# Rebuild local packages so source fixes cannot silently reuse stale .debs.
+"$repo/distro/scripts/build-packages"
+docker run --rm --privileged \
+    --mount "type=bind,src=$repo,dst=/src" \
+    -e SPICY_OWNER_UID="$(id -u)" -e SPICY_OWNER_GID="$(id -g)" \
+    spicy-builder:alpha sh -eu -c '
+        work=/src/distro/build/live
+        sh /src/distro/tools/stage-live-config "$work"
+        mkdir -p "$work/config/packages.chroot"
+        # Keep earlier archives in dist, but never mix their versions into the
+        # new image or retain old local Spicy packages in the staged profile.
+        package_version="$(cat /src/distro/dist/spicy-package-version)"
+        rm -f "$work/config/packages.chroot"/spicy-*_all.deb
+        for package_name in spicy-artwork spicy-desktop spicy-release; do
+            cp "/src/distro/dist/${package_name}_${package_version}_all.deb" "$work/config/packages.chroot/"
+        done
+        cd "$work"
+        lb config
+        # Rebuild stages together so an interrupted run cannot leave stage
+        # markers referring to a different cached root filesystem. Download
+        # and bootstrap caches are retained by the default clean operation.
+        lb clean
+        python3 /src/distro/tools/prepare-boot.py "$work/config/spicy-menu.png"
+        lb bootstrap
+        # live-build temporarily diverts os-release during bootstrap. It normally
+        # removes this in chroot_hacks, after local packages are configured;
+        # release identity packages need the normal path before that stage.
+        if [ "$(chroot chroot dpkg-divert --listpackage /etc/os-release)" = LOCAL ] &&
+           [ "$(chroot chroot dpkg-divert --truename /etc/os-release)" = /etc/os-release.debootstrap ]; then
+            chroot chroot dpkg-divert --local --remove --no-rename /etc/os-release
+            if [ -e chroot/etc/os-release.debootstrap ] || [ -L chroot/etc/os-release.debootstrap ]; then
+                mv -f chroot/etc/os-release.debootstrap chroot/etc/os-release
+            fi
+        fi
+        # Continue with the remaining lb build stages directly. Running lb
+        # build here repeats bootstrap_cache restore, replacing this rootfs
+        # with its cached copy and reintroducing the diversion just removed.
+        lb chroot
+        lb installer
+        lb binary
+        lb source
+        cp live-image-amd64.hybrid.iso /src/distro/dist/spicy-linux-0.1-alpha-amd64.iso
+        cd /src/distro/dist
+        sha256sum spicy-linux-0.1-alpha-amd64.iso > spicy-linux-0.1-alpha-amd64.iso.sha256
+        chown "$SPICY_OWNER_UID:$SPICY_OWNER_GID" spicy-linux-0.1-alpha-amd64.iso*
+    '

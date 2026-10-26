@@ -1,0 +1,11 @@
+[SddmGreeterTheme]
+Name=Spicy Linux
+Description=Spicy portrait on the left and a readable sign-in form on the right
+Author=Spicy Linux
+License=GPL-2.0-only
+Type=sddm-theme
+Version=0.1.0
+MainScript=Main.qml
+ConfigFile=theme.conf
+Theme-API=2.0
+QtVersion=6

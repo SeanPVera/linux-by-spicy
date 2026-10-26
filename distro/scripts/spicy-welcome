@@ -1,0 +1,147 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: GPL-2.0-only
+import configparser
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, Property, QProcess, Signal, Slot, QUrl
+from PySide6.QtGui import QFont, QGuiApplication
+from PySide6.QtQml import QQmlApplicationEngine
+
+DATA = Path(os.environ.get("SPICY_DATA_DIR", "/usr/share/spicy"))
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+
+
+class Backend(QObject):
+    changed = Signal()
+
+    def __init__(self, preview=False):
+        super().__init__()
+        self.preview = preview
+        self.process = None
+        self._theme = "daylight"
+        self._motion = False
+        self._busy = False
+        self._status = "Pick a look, explore your desktop, and make yourself at home."
+        settings = configparser.ConfigParser(interpolation=None)
+        settings.read(CONFIG / "spicyrc")
+        self._theme = settings.get("Appearance", "Theme", fallback="daylight")
+        self._motion = settings.getboolean("Appearance", "ReducedMotion", fallback=False)
+
+    @Property(str, notify=changed)
+    def currentTheme(self):
+        return self._theme
+
+    @Property(bool, notify=changed)
+    def reducedMotion(self):
+        return self._motion
+
+    @Property(bool, notify=changed)
+    def busy(self):
+        return self._busy
+
+    @Property(str, notify=changed)
+    def status(self):
+        return self._status
+
+    def run(self, arguments, success, on_success=None):
+        if self._busy:
+            return
+        if self.preview:
+            if on_success:
+                on_success()
+            self._status = success
+            self.changed.emit()
+            return
+        self._busy = True
+        self._status = "Getting comfortable…"
+        self.changed.emit()
+        process = QProcess(self)
+        self.process = process
+
+        def complete(status, saved=False):
+            if self.process is not process:
+                return
+            self._busy = False
+            if saved and on_success:
+                on_success()
+            self._status = status
+            self.process = None
+            process.deleteLater()
+            self.changed.emit()
+
+        def finished(code, exit_status):
+            normal = exit_status == QProcess.NormalExit
+            if normal and code == 0:
+                complete(success, saved=True)
+            elif normal and code == 2:
+                # spicy-appearance reserves 2 for saved settings whose live
+                # Plasma/KWin refresh failed or timed out.
+                complete("Your preference is saved. Try again when the desktop is responding to finish applying it.", saved=True)
+            else:
+                details = bytes(process.readAllStandardError()).decode("utf-8", errors="replace").strip()
+                if details:
+                    print(details, file=sys.stderr)
+                complete("Couldn't finish applying that setting. Try again when the desktop is responding, or use System Settings.")
+        process.finished.connect(finished)
+
+        def failed(error):
+            # A crashed process also emits finished; only a failed start needs
+            # cleanup here. Capture this process so retries cannot clean up a
+            # different, newer appearance request.
+            if error == QProcess.FailedToStart:
+                complete("Couldn't open the appearance tool. Try System Settings.")
+        process.errorOccurred.connect(failed)
+        process.start("spicy-appearance", arguments)
+
+    @Slot(str)
+    def setTheme(self, name):
+        if name not in ("daylight", "night-prowl"):
+            return
+        self.run(["--theme", name], "Your desktop is ready.", lambda: setattr(self, "_theme", name))
+
+    @Slot(bool)
+    def setReducedMotion(self, value):
+        self.run(["--reduced-motion", "on" if value else "off"], "Motion preference updated.", lambda: setattr(self, "_motion", value))
+
+    def open(self, args):
+        if not self.preview:
+            subprocess.Popen(args, start_new_session=True)
+
+    @Slot()
+    def openSettings(self):
+        self.open(["systemsettings"])
+
+    @Slot()
+    def openFiles(self):
+        self.open(["xdg-open", str(Path.home())])
+
+    @Slot()
+    def openGuide(self):
+        self.open(["xdg-open", "https://github.com/SeanPVera/linux-by-spicy/blob/spicy-distro/README.md"])
+
+
+def main():
+    app = QGuiApplication(sys.argv)
+    app.setApplicationName("Spicy Welcome")
+    app.setOrganizationName("SpicyLinux")
+    app.setFont(QFont("Atkinson Hyperlegible", 11))
+    backend = Backend("--preview" in sys.argv)
+    engine = QQmlApplicationEngine()
+    engine.rootContext().setContextProperty("backend", backend)
+    engine.rootContext().setContextProperty("spicyArtwork", QUrl.fromLocalFile(str(DATA / "artwork") + "/").toString())
+    try:
+        engine.load(QUrl.fromLocalFile(str(DATA / "qml/Welcome.qml")))
+        if not engine.rootObjects():
+            return 1
+        return app.exec()
+    finally:
+        # Destroy the QML bindings while their Python context still exists.
+        engine.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

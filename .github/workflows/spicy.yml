@@ -1,0 +1,79 @@
+name: Spicy desktop alpha
+
+on:
+  push:
+    branches: [spicy-distro]
+    paths: ["distro/**", "README.md", ".github/workflows/spicy.yml"]
+  pull_request:
+    paths: ["distro/**", "README.md", ".github/workflows/spicy.yml"]
+  workflow_dispatch:
+    inputs:
+      build_iso:
+        description: Build the live desktop ISO after package validation
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spicy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  packages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            distro
+            .github
+          fetch-depth: 1
+      - name: Build the Debian toolchain and packages
+        run: ./distro/scripts/build-packages
+      - name: Check assets and native Qt scaling
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -e XDG_CACHE_HOME=/tmp/spicy-cache \
+            --mount "type=bind,src=$PWD,dst=/src" \
+            spicy-builder:alpha sh distro/tools/check-native
+      - name: Validate live-build configuration
+        run: |
+          docker run --rm --mount "type=bind,src=$PWD,dst=/src" \
+            spicy-builder:alpha sh distro/tools/validate-live-config
+      - name: Check Plymouth rendering and initramfs assets
+        run: |
+          docker run --rm --mount "type=bind,src=$PWD,dst=/src" \
+            spicy-builder:alpha python3 distro/tools/check-plymouth
+      - name: Check release package install and removal
+        run: |
+          docker run --rm --mount "type=bind,src=$PWD,dst=/src" \
+            spicy-builder:alpha sh distro/tools/check-release
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spicy-desktop-alpha
+          path: |
+            distro/dist/*.deb
+            distro/build/previews/
+
+  live-image:
+    if: github.event_name == 'workflow_dispatch' && inputs.build_iso
+    needs: packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            distro
+          fetch-depth: 1
+      - run: ./distro/scripts/build-live
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spicy-live-alpha-amd64
+          path: |
+            distro/dist/*.iso
+            distro/dist/*.sha256

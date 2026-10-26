@@ -1,0 +1,14 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+# Normalize copied build inputs; never change the source checkout's modes.
+set -eu
+work="${1:?Supply the live-build staging directory}"
+profile="${2:-$(CDPATH='' cd -- "$(dirname -- "$0")/../live" && pwd)}"
+mkdir -p "$work"
+cp -a "$profile/auto" "$profile/config" "$work/"
+# live-build's tar overlay preserves modes, including existing system dirs.
+# Private upload/checkouts must not make /etc inaccessible to service users.
+find "$work/auto" "$work/config" -type d -exec chmod 0755 {} +
+find "$work/auto" "$work/config" -type f -exec chmod u=rwX,go=rX {} +
+find "$work/auto" -type f -exec chmod 0755 {} +
+find "$work/config/hooks" -type f \( -name '*.chroot' -o -name '*.binary' -o -name '*.container' \) -exec chmod 0755 {} +

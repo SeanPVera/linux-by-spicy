@@ -1,0 +1,680 @@
+{
+  "schema_version": 1,
+  "review_status": "Narrow ARM installed-desktop theme cycle completed with appearance discrepancies; full graphics acceptance incomplete.",
+  "source": {
+    "kind": "user_supplied_archive",
+    "archive_name": "Archive.zip",
+    "archive_sha256": "acc273d512a971ededa0e0060f421efd9861bf41cf1f93491c6d6e2946ee6de0",
+    "review_method": "Read the supplied script without execution; inspect raw command outputs, KWin responses, journal extracts and all four screenshots.",
+    "reviewer_executed_guest_commands": false,
+    "raw_evidence_visibility": "Private uploaded archive; raw screenshots, journals and user identifiers are not committed."
+  },
+  "scope": {
+    "kind": "installed_desktop_packages",
+    "reported_os": "Debian 13.7 ARM64",
+    "reported_hypervisor": "Parallels ARM Virtual Machine",
+    "installed_packages": {
+      "spicy-artwork": "0.1.0~alpha1",
+      "spicy-desktop": "0.1.0~alpha1"
+    },
+    "installed_package_sha256": null,
+    "source_commit": null,
+    "spicy_iso_sha256": null,
+    "provenance_limit": "Repeated alpha package versions do not establish source commit or payload identity. This run does not validate the amd64 live ISO."
+  },
+  "run": {
+    "started": "2026-10-15T20:55:02.345580-04:00",
+    "finished": "2026-10-15T20:55:21.313677-04:00",
+    "timezone": "America/New_York",
+    "elapsed_seconds": 18.968097,
+    "five_second_settling_waits": 3,
+    "command_finish_times_recorded": false,
+    "reported_execution": "Approved desktop access as the logged-in non-root user.",
+    "command_count": 26,
+    "command_exit_counts": {
+      "0": 25,
+      "1": 1
+    },
+    "nonzero_command": "loginctl show-session self; runner outside login session process scope. Live session evidence comes from KWin.",
+    "final_saved_theme": "daylight"
+  },
+  "observed_graphics": {
+    "kwin_version": "6.3.6",
+    "qt_version": "6.8.2",
+    "session": "Wayland",
+    "output_backend": "DRM",
+    "compositing_type": "OpenGL",
+    "opengl_renderer": "virgl (Apple M4 (Compat))",
+    "opengl_version": "4.0 (Core Profile) Mesa 25.0.7-2+deb13u1",
+    "opengl_platform_interface": "EGL",
+    "mesa_version": "25.0.7",
+    "kernel_version": "6.12.111",
+    "output": {
+      "name": "Virtual-1",
+      "width": 1920,
+      "height": 1080,
+      "scale": 1,
+      "refresh_hz": 60
+    },
+    "kwin_reported_virtual_machine": " no",
+    "virtual_machine_field_limit": "KWin identification does not override the declared Parallels ARM scope.",
+    "cursor_theme": "breeze_cursors",
+    "cursor_size": 24,
+    "decoration_font": "Noto Sans,10,-1,0,400,0,0,0,0,0,0,0,0,0,0,1",
+    "queries_consistent_before_and_after_all_switches": true
+  },
+  "stages": [
+    {
+      "label": "01-daylight",
+      "theme": "daylight",
+      "apply_exit_code": 0,
+      "saved_theme": "daylight",
+      "saved_color_scheme": "SpicyDaylight",
+      "capture": "01-daylight.png",
+      "kwin_query_exit_code": 0
+    },
+    {
+      "label": "02-night-prowl",
+      "theme": "night-prowl",
+      "apply_exit_code": 0,
+      "saved_theme": "night-prowl",
+      "saved_color_scheme": "SpicyNightProwl",
+      "capture": "02-night-prowl.png",
+      "kwin_query_exit_code": 0
+    },
+    {
+      "label": "03-daylight",
+      "theme": "daylight",
+      "apply_exit_code": 0,
+      "saved_theme": "daylight",
+      "saved_color_scheme": "SpicyDaylight",
+      "capture": "03-daylight.png",
+      "kwin_query_exit_code": 0
+    }
+  ],
+  "visual_review": {
+    "observed": [
+      "Wallpaper, browser and file-manager palettes changed through Daylight, Night Prowl and return to Daylight.",
+      "Existing windows and panel remain visible; no obvious torn or corrupt frame in the four supplied stills."
+    ],
+    "discrepancies": [
+      "Konsole toolbar/tab strip remains dark in both Daylight captures and light in the Night Prowl capture. Its dark terminal profile is a separate observation.",
+      "KWin reports breeze_cursors size 24 throughout; active approved Spicy cursor identity is not established."
+    ],
+    "limits": [
+      "Screenshots omit the pointer and cannot verify shape/hotspot.",
+      "Still images and a 19-second cycle cannot establish animation smoothness, input latency, absence of transient stalls or sustained stability.",
+      "Welcome controls and interactive application procedures were not exercised."
+    ]
+  },
+  "journal_review": {
+    "new_kwin_unit_entries_during_test": 0,
+    "whole_user_journal_during_test": "xsettingsd reload messages only in the supplied interval extract.",
+    "preexisting_findings": [
+      {
+        "kind": "input_processing_lag",
+        "timestamp": "2026-10-15T20:48:40.255395-04:00",
+        "milliseconds": 30
+      },
+      {
+        "kind": "GL_INVALID_OPERATION in glDrawBuffers(unsupported buffer GL_BACK_LEFT)",
+        "first_timestamp": "2026-10-15T20:52:22.650900-04:00",
+        "last_timestamp": "2026-10-15T20:52:22.687098-04:00",
+        "count": 5
+      }
+    ],
+    "limits": "These preceding warnings were not generated by the recorded cycle and remain unresolved; an empty short interval does not prove stall-free sustained operation."
+  },
+  "reviewed_checks": [
+    {
+      "id": "live_wayland_virgl_renderer",
+      "status": "pass",
+      "notes": "KWin responses before and after switching identify Wayland and VirGL."
+    },
+    {
+      "id": "three_cli_theme_requests",
+      "status": "pass",
+      "notes": "All requests return 0; saved theme/color scheme match each stage."
+    },
+    {
+      "id": "visible_wallpaper_browser_file_manager_cycle",
+      "status": "pass",
+      "notes": "Four still screenshots support this narrow observation only."
+    },
+    {
+      "id": "consistent_live_application_palette",
+      "status": "fail",
+      "notes": "Konsole chrome shows the preceding palette."
+    },
+    {
+      "id": "kwin_cursor_theme_matches_spicy",
+      "status": "fail",
+      "notes": "KWin reports breeze_cursors, size 24, throughout."
+    },
+    {
+      "id": "welcome_controls",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "pointer_shape_and_hotspot",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "reduced_motion",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "lock_unlock",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "sign_out_persistence",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "application_interaction",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "sustained_graphics_stability",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "complete_scaling_matrix",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "live_image_boot_identity",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "amd64_iso_accelerated_validation",
+      "status": "untested",
+      "notes": ""
+    }
+  ],
+  "commands": [
+    {
+      "label": "identity",
+      "executable": "id",
+      "started": "2026-10-15T20:55:02.354490-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "session",
+      "executable": "loginctl",
+      "started": "2026-10-15T20:55:02.356979-04:00",
+      "exit_code": 1
+    },
+    {
+      "label": "packages",
+      "executable": "dpkg-query",
+      "started": "2026-10-15T20:55:02.360347-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "spectacle-help",
+      "executable": "spectacle",
+      "started": "2026-10-15T20:55:02.373742-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "kwin-before",
+      "executable": "qdbus6",
+      "started": "2026-10-15T20:55:02.658466-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "logs-before",
+      "executable": "journalctl",
+      "started": "2026-10-15T20:55:02.663429-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "00-before",
+      "executable": "spectacle",
+      "started": "2026-10-15T20:55:02.674924-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "01-daylight-apply",
+      "executable": "spicy-appearance",
+      "started": "2026-10-15T20:55:03.167964-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "01-daylight-saved-theme",
+      "executable": "kreadconfig6",
+      "started": "2026-10-15T20:55:09.085549-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "01-daylight-colors",
+      "executable": "kreadconfig6",
+      "started": "2026-10-15T20:55:09.111759-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "01-daylight",
+      "executable": "spectacle",
+      "started": "2026-10-15T20:55:09.122591-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "01-daylight-kwin",
+      "executable": "qdbus6",
+      "started": "2026-10-15T20:55:09.438310-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "01-daylight-logs",
+      "executable": "journalctl",
+      "started": "2026-10-15T20:55:09.442788-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "02-night-prowl-apply",
+      "executable": "spicy-appearance",
+      "started": "2026-10-15T20:55:09.446117-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "02-night-prowl-saved-theme",
+      "executable": "kreadconfig6",
+      "started": "2026-10-15T20:55:15.060708-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "02-night-prowl-colors",
+      "executable": "kreadconfig6",
+      "started": "2026-10-15T20:55:15.078300-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "02-night-prowl",
+      "executable": "spectacle",
+      "started": "2026-10-15T20:55:15.087390-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "02-night-prowl-kwin",
+      "executable": "qdbus6",
+      "started": "2026-10-15T20:55:15.373662-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "02-night-prowl-logs",
+      "executable": "journalctl",
+      "started": "2026-10-15T20:55:15.378023-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "03-daylight-apply",
+      "executable": "spicy-appearance",
+      "started": "2026-10-15T20:55:15.380519-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "03-daylight-saved-theme",
+      "executable": "kreadconfig6",
+      "started": "2026-10-15T20:55:20.963676-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "03-daylight-colors",
+      "executable": "kreadconfig6",
+      "started": "2026-10-15T20:55:20.974693-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "03-daylight",
+      "executable": "spectacle",
+      "started": "2026-10-15T20:55:20.980051-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "03-daylight-kwin",
+      "executable": "qdbus6",
+      "started": "2026-10-15T20:55:21.303761-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "03-daylight-logs",
+      "executable": "journalctl",
+      "started": "2026-10-15T20:55:21.308822-04:00",
+      "exit_code": 0
+    },
+    {
+      "label": "logs-test-user",
+      "executable": "journalctl",
+      "started": "2026-10-15T20:55:21.311626-04:00",
+      "exit_code": 0
+    }
+  ],
+  "next_targeted_checks": [
+    "Record installed helper and package payload hashes.",
+    "Inspect saved cursor/Kvantum configuration and Konsole per-application color scheme.",
+    "Compare existing and newly opened Qt windows after each theme switch before adopting a palette-ordering fix."
+  ],
+  "evidence_files": [
+    {
+      "name": "Spicy-desktop-test-20261015/00-before.png",
+      "size_bytes": 369940,
+      "sha256": "2d6a8a25f1b11ec8cb2944c958a84d4d9ea9da29f54217e4751ead1cc53e0907"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/00-before.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/00-before.stdout.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/01-daylight-apply.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/01-daylight-apply.stdout.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/01-daylight-colors.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/01-daylight-colors.stdout.txt",
+      "size_bytes": 14,
+      "sha256": "81702c6dc82fb7538ce24fc0698a51a21514f123524367fc82eac478473c5c7b"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/01-daylight-kwin.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/01-daylight-kwin.stdout.txt",
+      "size_bytes": 6804,
+      "sha256": "5df1496083948e4292c941f8f404fa565030f79b45e7304dc1049626c0bc563f"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/01-daylight-logs.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/01-daylight-logs.stdout.txt",
+      "size_bytes": 17,
+      "sha256": "19c4e28b2f54ea8f217db4e622b0a5c758efa7b77ce2dc0394b6d159568c0b2e"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/01-daylight-saved-theme.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/01-daylight-saved-theme.stdout.txt",
+      "size_bytes": 9,
+      "sha256": "f7876494a66e8a0bb17900380ee64904c1986152e6089548c72298bff4122f7f"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/01-daylight.png",
+      "size_bytes": 394822,
+      "sha256": "4ffa067bd1126f38fead283bcdf84b03e8d0e111f6b3989e58d66217a028f232"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/01-daylight.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/01-daylight.stdout.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/02-night-prowl-apply.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/02-night-prowl-apply.stdout.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/02-night-prowl-colors.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/02-night-prowl-colors.stdout.txt",
+      "size_bytes": 16,
+      "sha256": "a8a1a20dcd4b2ef9b06177b847d72e7b7583419b9e2db72553ae74dea853ea9a"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/02-night-prowl-kwin.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/02-night-prowl-kwin.stdout.txt",
+      "size_bytes": 6804,
+      "sha256": "5df1496083948e4292c941f8f404fa565030f79b45e7304dc1049626c0bc563f"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/02-night-prowl-logs.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/02-night-prowl-logs.stdout.txt",
+      "size_bytes": 17,
+      "sha256": "19c4e28b2f54ea8f217db4e622b0a5c758efa7b77ce2dc0394b6d159568c0b2e"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/02-night-prowl-saved-theme.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/02-night-prowl-saved-theme.stdout.txt",
+      "size_bytes": 12,
+      "sha256": "50a89d214b4d9592b8848998e402d77cddd404e6a2086274ca4077290273b5e4"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/02-night-prowl.png",
+      "size_bytes": 379852,
+      "sha256": "f76322a9980fb7a50d4532932b96eef94680b6a7b867d03744656a67f3a2eb28"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/02-night-prowl.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/02-night-prowl.stdout.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/03-daylight-apply.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/03-daylight-apply.stdout.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/03-daylight-colors.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/03-daylight-colors.stdout.txt",
+      "size_bytes": 14,
+      "sha256": "81702c6dc82fb7538ce24fc0698a51a21514f123524367fc82eac478473c5c7b"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/03-daylight-kwin.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/03-daylight-kwin.stdout.txt",
+      "size_bytes": 6804,
+      "sha256": "5df1496083948e4292c941f8f404fa565030f79b45e7304dc1049626c0bc563f"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/03-daylight-logs.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/03-daylight-logs.stdout.txt",
+      "size_bytes": 17,
+      "sha256": "19c4e28b2f54ea8f217db4e622b0a5c758efa7b77ce2dc0394b6d159568c0b2e"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/03-daylight-saved-theme.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/03-daylight-saved-theme.stdout.txt",
+      "size_bytes": 9,
+      "sha256": "f7876494a66e8a0bb17900380ee64904c1986152e6089548c72298bff4122f7f"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/03-daylight.png",
+      "size_bytes": 398268,
+      "sha256": "66fe194a726fcd79086e274a860c25d40ab9daa90487007dd92b1f168b18c06f"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/03-daylight.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/03-daylight.stdout.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/commands.json",
+      "size_bytes": 6824,
+      "sha256": "13345cc47f8f02496ef07d86653a0725a356cf7c05d13fcefb0dafc0c8665157"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/finished.txt",
+      "size_bytes": 33,
+      "sha256": "4b112475b7f8bce6a60917cd2e37cba93f42f1639ec4264ec2994726e9b3e361"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/identity.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/identity.stdout.txt",
+      "size_bytes": 188,
+      "sha256": "ee11bfab1c1747abe05bcbea031f6360d03f6e1ac2dd72e0ada85e1b5557aefe"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/kwin-before.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/kwin-before.stdout.txt",
+      "size_bytes": 6804,
+      "sha256": "5df1496083948e4292c941f8f404fa565030f79b45e7304dc1049626c0bc563f"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/logs-before.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/logs-before.stdout.txt",
+      "size_bytes": 2646,
+      "sha256": "f3d03480433f4a74d952f19a717e4fad80838da1dce4e7a54b5cfa8c7b673bfc"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/logs-test-user.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/logs-test-user.stdout.txt",
+      "size_bytes": 920,
+      "sha256": "a06053f4c4e07c3f256c56c3cb330aff92efcd54045ed8703383206db9c93676"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/packages.stderr.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/packages.stdout.txt",
+      "size_bytes": 54,
+      "sha256": "5d14fc6687a3de70b3022af6d9801e0f11d781bc0b70675e4dfd761c85ef3545"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/report.txt",
+      "size_bytes": 3677,
+      "sha256": "21b35cd0dac71e45a5703bacb56cca2507fc0de96e35983cbed7d2a7431f3102"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/run-test.py",
+      "size_bytes": 2564,
+      "sha256": "8a9038b253ac3c7770ac6db4d41521e6bfa5a984eba571843d8a00a60bad78fc"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/session.stderr.txt",
+      "size_bytes": 84,
+      "sha256": "fbf37a84cd0e33d541bd317f669a875b17c953b757e8b1819dd03dad29f6bb74"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/session.stdout.txt",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/spectacle-help.stderr.txt",
+      "size_bytes": 156,
+      "sha256": "5cd524a3d97473337a83544be85ed01a5459f0fb3b43e477f442259d0890de77"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/spectacle-help.stdout.txt",
+      "size_bytes": 3753,
+      "sha256": "bd2e6de1c09d4021d1a9704da9194e972b59087199c226e3ae9cfcc61b5602f3"
+    },
+    {
+      "name": "Spicy-desktop-test-20261015/started.txt",
+      "size_bytes": 33,
+      "sha256": "e49aa875540982a0c58372c5e564fbfe5aae2152dc970f074460e26fc3f4f0bb"
+    },
+    {
+      "name": "spicy-desktop-test-2026-10-15/kwin.log",
+      "size_bytes": 1530,
+      "sha256": "eb715ade9199e6d050328098e4fbad3b4e0a3a5fe6393b41bc1d8bfb17af7ccb"
+    }
+  ]
+}

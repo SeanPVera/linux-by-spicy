@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Welcome to Spicy Linux
+Comment=Meet Spicy and choose your desktop appearance
+Exec=spicy-welcome
+Icon=spicy-linux
+Categories=Settings;DesktopSettings;
+Terminal=false
+StartupNotify=true

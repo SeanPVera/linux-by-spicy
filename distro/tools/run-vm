@@ -1,0 +1,391 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
+"""Boot the live alpha without a hard disk and retain reproducible VM evidence."""
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import shutil
+import socket
+import stat
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+
+def timestamp():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def write_json(path, value):
+    path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+
+
+def positive(value):
+    number = int(value)
+    if number <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return number
+
+
+def resolution(value):
+    match = re.fullmatch(r"([0-9]+)x([0-9]+)", value)
+    if not match or not all(320 <= int(v) <= 7680 for v in match.groups()):
+        raise argparse.ArgumentTypeError("use WIDTHxHEIGHT, each from 320 to 7680")
+    return tuple(int(v) for v in match.groups())
+
+
+def digest(path):
+    sha = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            sha.update(chunk)
+    return sha.hexdigest()
+
+
+def require_file(path, label):
+    if not path.is_file():
+        raise ValueError(f"{label} does not exist: {path}")
+
+
+def drive_path(path):
+    # QEMU's key/value option syntax escapes literal commas by doubling them.
+    return str(path).replace(",", ",,")
+
+
+def device_evidence(path):
+    try:
+        info = path.stat()
+    except FileNotFoundError:
+        return {"path": str(path), "exists": False, "character_device": False,
+                "readable": False, "writable": False}
+    except OSError:
+        return {"path": str(path), "exists": None, "character_device": None,
+                "readable": False, "writable": False}
+    return {"path": str(path), "exists": True,
+            "character_device": stat.S_ISCHR(info.st_mode),
+            "readable": os.access(path, os.R_OK), "writable": os.access(path, os.W_OK)}
+
+
+def accessible_device(evidence):
+    return all(evidence[key] for key in ("exists", "character_device", "readable", "writable"))
+
+
+def help_probe(executable, arguments):
+    if not executable:
+        return {"status": "missing_command"}, None
+    try:
+        result = subprocess.run([executable, *arguments], text=True, capture_output=True,
+                                timeout=10, check=False)
+    except subprocess.TimeoutExpired:
+        return {"status": "timeout"}, None
+    except OSError:
+        return {"status": "unavailable"}, None
+    if result.returncode:
+        return {"status": "failed", "exit_code": result.returncode}, None
+    return {"status": "ok", "exit_code": 0}, result.stdout
+
+
+def host_capabilities(qemu, display, render_node):
+    """Read prerequisites and advertised QEMU support, without starting a VM."""
+    executable = shutil.which(qemu)
+    probes, outputs = {}, {}
+    for name, arguments in {"version": ["--version"], "accelerators": ["-accel", "help"],
+                            "devices": ["-device", "help"], "displays": ["-display", "help"]}.items():
+        probes[name], outputs[name] = help_probe(executable, arguments)
+    lists = {}
+    for name in ("accelerators", "displays"):
+        source = outputs[name]
+        lists[name] = ([line.strip() for line in source.splitlines()
+                        if re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", line.strip())]
+                       if source is not None else None)
+    lists["graphics_devices"] = ({name: bool(re.search(r'name "' + name + r'"', outputs["devices"]))
+                                 for name in ("virtio-vga", "virtio-vga-gl")}
+                                if outputs["devices"] is not None else None)
+    nodes = sorted(Path("/dev/dri").glob("renderD*"))
+    devices = {"kvm": device_evidence(Path("/dev/kvm")),
+               "render_nodes": [device_evidence(node) for node in nodes],
+               "selected_render_node": device_evidence(render_node)}
+    evidence = {
+        "inspected_utc": timestamp(), "display": display,
+        "qemu": {"requested": qemu, "executable": executable,
+                 "version": (outputs["version"].splitlines()[0] if outputs["version"] else None),
+                 "probes": probes, "advertised": lists},
+        "devices": devices,
+        "limits": "Access checks and QEMU help listings do not initialize KVM or EGL/GTK. "
+                  "Actual launch, host GL support, and the guest renderer remain unverified.",
+    }
+    evidence["combinations"] = {}
+    for accel in ("tcg", "kvm"):
+        for graphics in ("software", "virgl"):
+            blocked, unknown = prerequisites(evidence, accel, graphics)
+            evidence["combinations"][f"{accel}+{graphics}"] = {
+                "status": "blocked" if blocked else "unverified",
+                "blocked_reasons": blocked, "unknown_probes": unknown,
+            }
+    return evidence
+
+
+def prerequisites(evidence, accel, graphics):
+    blocked, unknown = [], []
+    advertised = evidence["qemu"]["advertised"]
+    if not evidence["qemu"]["executable"]:
+        blocked.append("QEMU executable is unavailable")
+    required = [("accelerators", accel),
+                ("graphics_devices", "virtio-vga-gl" if graphics == "virgl" else "virtio-vga")]
+    if evidence["display"] == "gtk":
+        required.append(("displays", "gtk"))
+    elif graphics == "virgl":
+        required.append(("displays", "egl-headless"))
+    for category, name in required:
+        if advertised[category] is None:
+            unknown.append(category)
+        elif (not advertised[category].get(name, False) if category == "graphics_devices"
+              else name not in advertised[category]):
+            blocked.append(f"QEMU does not advertise {name}")
+    if accel == "kvm" and not accessible_device(evidence["devices"]["kvm"]):
+        blocked.append("KVM requires a readable/writable /dev/kvm character device")
+    if graphics == "virgl":
+        if evidence["display"] == "headless":
+            selected = evidence["devices"]["selected_render_node"]
+            if not accessible_device(selected):
+                blocked.append(f"VirGL EGL requires a readable/writable render character device: {selected['path']}")
+        elif not any(accessible_device(node) for node in evidence["devices"]["render_nodes"]):
+            blocked.append("VirGL GTK requires a readable/writable /dev/dri/renderD* character device")
+    return blocked, unknown
+
+
+def inspect(args):
+    if args.output and args.output.exists():
+        raise ValueError(f"evidence already exists: {args.output}")
+    evidence = host_capabilities(args.qemu, args.display,
+                                 (args.render_node or Path("/dev/dri/renderD128")).resolve())
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        with args.output.open("x", encoding="utf-8") as stream:
+            stream.write(json.dumps(evidence, indent=2) + "\n")
+    print(json.dumps(evidence, indent=2))
+    return 0
+
+
+def launch(args):
+    iso = args.iso.resolve()
+    output = args.output.resolve()
+    firmware = args.firmware.resolve()
+    variables = args.variables.resolve()
+    qmp = output / "qmp.sock"
+    require_file(iso, "ISO")
+    require_file(firmware, "OVMF code")
+    require_file(variables, "OVMF variable template")
+    if output.exists():
+        raise ValueError(f"output directory already exists; choose a new run: {output}")
+    if "," in str(qmp) or len(os.fsencode(qmp)) > 103:
+        raise ValueError("output path must be short enough for a Unix socket and contain no comma")
+
+    accel = args.accel or ("kvm" if args.profile == "accelerated" else "tcg")
+    graphics = args.graphics or ("virgl" if args.profile == "accelerated" else "software")
+    virgl = graphics == "virgl"
+    if args.render_node and (not virgl or args.display != "headless"):
+        raise ValueError("--render-node is supported only with VirGL and headless (EGL) display")
+    render_node = (args.render_node or Path("/dev/dri/renderD128")).resolve()
+    cpu = "host" if accel == "kvm" else "max"
+    gpu = "virtio-vga-gl" if virgl else "virtio-vga"
+    if args.display == "headless":
+        display = f"egl-headless,rendernode={drive_path(render_node)}" if virgl else "none"
+    else:
+        display = "gtk,gl=on" if virgl else "gtk,gl=off"
+    width, height = args.resolution
+    command = [
+        args.qemu, "-name", "Spicy live validation", "-nodefaults",
+        "-machine", "q35", "-accel", accel,
+        "-cpu", cpu, "-smp", str(args.cpus), "-m", str(args.memory),
+        "-drive", f"if=pflash,unit=0,format=raw,readonly=on,file={drive_path(firmware)}",
+        "-drive", f"if=pflash,unit=1,format=raw,file={drive_path(output / 'OVMF_VARS.fd')}",
+        "-cdrom", str(iso), "-boot", "order=d,menu=on",
+        "-device", f"{gpu},xres={width},yres={height}", "-display", display,
+        "-device", "qemu-xhci", "-device", "usb-kbd", "-device", "usb-tablet",
+        "-nic", "user,model=virtio-net-pci" if args.network == "user" else "none",
+        "-serial", f"file:{output / 'serial.log'}", "-monitor", "none",
+        "-qmp", f"unix:{qmp},server=on,wait=off",
+    ]
+    profile = {
+        "hypervisor": "QEMU",
+        "machine": "q35",
+        "cpu": f"{cpu}; {args.cpus} virtual CPUs",
+        "firmware": firmware.name,
+        "graphics": f"{gpu}; requested mode {width}x{height}" +
+                    (f"; EGL render node {render_node.name}" if virgl and args.display == "headless"
+                     else "; GTK automatically selects the render node" if virgl else ""),
+        "memory_mib": args.memory,
+        "acceleration": f"{accel.upper()}; requested {'VirGL' if virgl else 'guest software rendering'}",
+    }
+    if args.dry_run:
+        print(json.dumps({"command": command, "vm_profile": profile}, indent=2))
+        return 0
+
+    capabilities = host_capabilities(args.qemu, args.display, render_node)
+    blocked, _ = prerequisites(capabilities, accel, graphics)
+    if blocked:
+        raise ValueError("; ".join(blocked))
+    executable = capabilities["qemu"]["executable"]
+    command[0] = executable
+    iso_sha256 = digest(iso)
+    if args.expected_sha256 and iso_sha256 != args.expected_sha256.lower():
+        raise ValueError(f"ISO SHA-256 mismatch: computed {iso_sha256}")
+    output.mkdir(parents=True)
+    shutil.copyfile(variables, output / "OVMF_VARS.fd")
+    profile["hypervisor_version"] = capabilities["qemu"]["version"] or "unavailable"
+    # An OVMF filename does not establish its version; record the exact bytes.
+    profile["firmware_version"] = "sha256:" + digest(firmware)
+    write_json(output / "vm-profile.json", profile)
+    write_json(output / "host-capabilities.json", capabilities)
+    manifest = {
+        "started_utc": timestamp(), "image_name": iso.name,
+        "iso_sha256": iso_sha256, "iso_size_bytes": iso.stat().st_size,
+        "profile": args.profile, "cpu_acceleration": accel, "graphics": graphics, "network": args.network,
+        "display": args.display, "command": command,
+        "ovmf_variables_template_sha256": digest(variables),
+        "status": "starting",
+    }
+    write_json(output / "run.json", manifest)
+    print(f"Evidence: {output}\nISO SHA-256: {iso_sha256}\n{shlex.join(command)}", flush=True)
+    result = 1
+    try:
+        with (output / "qemu.log").open("wb") as log:
+            process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
+                                       start_new_session=True)
+            manifest["status"] = "running"
+            write_json(output / "run.json", manifest)
+            try:
+                result = process.wait(timeout=args.max_seconds)
+                manifest["status"] = "exited"
+            except (subprocess.TimeoutExpired, KeyboardInterrupt) as error:
+                process.terminate()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                result = 124 if isinstance(error, subprocess.TimeoutExpired) else 130
+                manifest["status"] = "time-limit" if result == 124 else "interrupted"
+            manifest["qemu_exit_code"] = process.returncode
+    except OSError:
+        manifest["status"] = "launch-failed"
+        raise
+    finally:
+        manifest["finished_utc"] = timestamp()
+        write_json(output / "run.json", manifest)
+    return result
+
+
+class QMP:
+    def __init__(self, output):
+        path = output / "qmp.sock"
+        self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.socket.settimeout(10)
+        self.socket.connect(str(path))
+        self.stream = self.socket.makefile("rwb")
+        greeting = self.read()
+        if "QMP" not in greeting:
+            raise ValueError("QEMU did not send a QMP greeting")
+        self.command("qmp_capabilities")
+
+    def read(self):
+        line = self.stream.readline()
+        if not line:
+            raise ValueError("QEMU closed the QMP connection")
+        return json.loads(line)
+
+    def command(self, name, arguments=None):
+        request = {"execute": name}
+        if arguments is not None:
+            request["arguments"] = arguments
+        self.stream.write(json.dumps(request).encode("utf-8") + b"\n")
+        self.stream.flush()
+        while True:
+            reply = self.read()
+            if "error" in reply:
+                raise ValueError(f"QMP {name}: {reply['error']}")
+            if "return" in reply:
+                return reply["return"]
+
+    def close(self):
+        self.stream.close()
+        self.socket.close()
+
+
+def control(args):
+    output = args.output.resolve()
+    require_file(output / "run.json", "run manifest")
+    client = QMP(output)
+    try:
+        if args.action == "stop":
+            client.command("quit")
+            print("QEMU stopped")
+        else:
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", args.name):
+                raise ValueError("capture name must contain only letters, numbers, '_' or '-'")
+            target = output / f"{args.name}.png"
+            if target.exists():
+                raise ValueError(f"capture already exists: {target}")
+            client.command("screendump", {"filename": str(target), "format": "png"})
+            write_json(output / f"{args.name}.json", {
+                "captured_utc": timestamp(), "screenshot": target.name,
+                "qemu_status": client.command("query-status"),
+            })
+            print(target)
+    finally:
+        client.close()
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    actions = parser.add_subparsers(dest="action", required=True)
+    run = actions.add_parser("run", help="boot an ISO using disposable UEFI variables and no hard disk")
+    run.add_argument("iso", type=Path)
+    run.add_argument("--output", type=Path, required=True, help="new evidence directory; existing runs are never overwritten")
+    run.add_argument("--profile", choices=("software", "accelerated"), default="software")
+    run.add_argument("--accel", choices=("tcg", "kvm"), help="override profile CPU acceleration; never falls back")
+    run.add_argument("--graphics", choices=("software", "virgl"), help="override profile graphics independently of CPU acceleration")
+    run.add_argument("--display", choices=("gtk", "headless"), default="gtk")
+    run.add_argument("--memory", type=positive, default=4096, metavar="MIB")
+    run.add_argument("--cpus", type=positive, default=2)
+    run.add_argument("--resolution", type=resolution, default=(1920, 1080), metavar="WIDTHxHEIGHT")
+    run.add_argument("--network", choices=("none", "user"), default="none")
+    run.add_argument("--firmware", type=Path, default=Path("/usr/share/OVMF/OVMF_CODE_4M.fd"))
+    run.add_argument("--variables", type=Path, default=Path("/usr/share/OVMF/OVMF_VARS_4M.fd"))
+    run.add_argument("--render-node", type=Path, help="GPU render node for VirGL headless EGL only")
+    run.add_argument("--qemu", default="qemu-system-x86_64")
+    run.add_argument("--expected-sha256", help="fail before booting unless the ISO matches this SHA-256")
+    run.add_argument("--max-seconds", type=positive, help="stop after this limit; exit 124 does not mean a boot passed")
+    run.add_argument("--dry-run", action="store_true", help="validate paths and print the plan without creating a run")
+    run.set_defaults(handler=launch)
+    preflight = actions.add_parser("inspect", help="record host devices and QEMU advertised support without booting")
+    preflight.add_argument("--qemu", default="qemu-system-x86_64")
+    preflight.add_argument("--display", choices=("gtk", "headless"), default="headless")
+    preflight.add_argument("--render-node", type=Path)
+    preflight.add_argument("--output", type=Path, help="new JSON evidence file; existing files are never overwritten")
+    preflight.set_defaults(handler=inspect)
+    capture = actions.add_parser("capture", help="save a PNG of the current framebuffer through QMP")
+    capture.add_argument("output", type=Path, help="same evidence directory used by run")
+    capture.add_argument("--name", default="screen")
+    capture.set_defaults(handler=control)
+    stop = actions.add_parser("stop", help="quit the QEMU instance through QMP")
+    stop.add_argument("output", type=Path)
+    stop.set_defaults(handler=control)
+    args = parser.parse_args()
+    if args.action == "run" and args.expected_sha256 and not re.fullmatch(r"[a-fA-F0-9]{64}", args.expected_sha256):
+        parser.error("--expected-sha256 must be 64 hexadecimal digits")
+    try:
+        return args.handler(args)
+    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+        parser.exit(1, f"run-vm: {error}\n")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

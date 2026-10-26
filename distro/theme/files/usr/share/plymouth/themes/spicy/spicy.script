@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: GPL-2.0-only
+Window.SetBackgroundTopColor(0.082, 0.11, 0.125);
+Window.SetBackgroundBottomColor(0.082, 0.11, 0.125);
+fun minimum(a, b) { if (a < b) return a; return b; }
+screen_w = Window.GetWidth();
+screen_h = Window.GetHeight();
+portrait_size = minimum(screen_w * 0.25, screen_h * 0.34);
+portrait_image = Image("portrait.png").Scale(portrait_size, portrait_size);
+portrait = Sprite(portrait_image);
+portrait.SetX((screen_w - portrait_size) / 2);
+portrait.SetY(screen_h * 0.23);
+bar_width = minimum(screen_w * 0.52, 460);
+bar_y = screen_h * 0.67;
+track_image = Image("progress.png").Scale(bar_width, 5);
+track = Sprite(track_image);
+track.SetX((screen_w - bar_width) / 2);
+track.SetY(bar_y);
+track.SetOpacity(0.2);
+progress = Sprite();
+progress.SetX((screen_w - bar_width) / 2);
+progress.SetY(bar_y);
+progress.SetZ(1);
+prompt = Sprite();
+prompt.SetZ(4);
+fun boot_progress(duration, fraction) {
+    if (fraction < 0.02) fraction = 0.02;
+    if (fraction > 1) fraction = 1;
+    progress.SetImage(Image("progress.png").Scale(bar_width * fraction, 5));
+}
+fun message(text) {
+    image = Image.Text(text, 0.96, 0.94, 0.90);
+    prompt.SetImage(image);
+    prompt.SetX((screen_w - image.GetWidth()) / 2);
+    prompt.SetY(screen_h * 0.76);
+    prompt.SetOpacity(1);
+}
+fun normal() { prompt.SetOpacity(0); }
+fun password(question, bullets) {
+    masked = "";
+    for (i = 0; i < bullets; i++) masked += "*";
+    message(question + " " + masked);
+}
+fun question(text, entry) { message(text + " " + entry); }
+Plymouth.SetBootProgressFunction(boot_progress);
+Plymouth.SetMessageFunction(message);
+Plymouth.SetDisplayNormalFunction(normal);
+Plymouth.SetDisplayPasswordFunction(password);
+Plymouth.SetDisplayQuestionFunction(question);

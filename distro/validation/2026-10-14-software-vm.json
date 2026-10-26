@@ -1,0 +1,651 @@
+{
+  "schema_version": 1,
+  "review_status": "Graphics gate incomplete; PR remains draft.",
+  "image": {
+    "name": "spicy-linux-0.1-alpha-amd64.iso",
+    "sha256": "240830a1a6efafe71e649879f626661ff6bed703abade88166a1ab145f8855cf",
+    "size_bytes": 1869873152,
+    "source_commit": "c45155426d2285ac39f92ea5ef93cb924a7c9b53",
+    "boot_origin_confirmed_against_launcher": true
+  },
+  "run": {
+    "label": "late-vt-software",
+    "started_utc": "2026-10-14T04:46:49.547308+00:00",
+    "finished_utc": "2026-10-14T05:10:25.772454+00:00",
+    "wall_elapsed_seconds": 1416.225,
+    "qemu_exit_code": 0,
+    "display": "headless",
+    "network": "none",
+    "declared_vm_profile": {
+      "acceleration": "TCG; requested guest software rendering",
+      "cpu": "max; 2 virtual CPUs",
+      "firmware": "OVMF_CODE_4M.fd",
+      "firmware_version": "sha256:624e06de18b4fa535e90db7160d00d3d07d206422b89999bf1e27d920264e4e0",
+      "graphics": "virtio-vga; requested mode 1920x1080",
+      "hypervisor": "QEMU",
+      "hypervisor_version": "QEMU emulator version 10.0.13 (Debian 1:10.0.13+ds-0+deb13u1)",
+      "machine": "q35",
+      "memory_mib": 4096
+    },
+    "ovmf_variables_template_sha256": "5d2ac383371b408398accee7ec27c8c09ea5b74a0de0ceea6513388b15be5d1e",
+    "host_cpu_quota_cores": 4,
+    "interventions": "No guest input in first 203 seconds; later VT changes, supplemental read-only diagnostic CD, local USB serial root diagnostics, QMP keyboard/pointer input and display-wake request. Host execution transport disconnected once; no OOM kill observed. These conditions limit interactive acceptance."
+  },
+  "host_acceleration": {
+    "kvm_device_available": false,
+    "render_node_available": false,
+    "qemu_advertises_virgl_and_egl_after_gui_dependency": true,
+    "accelerated_launch": "Rejected by prerequisite validation, exit 1; QEMU not started.",
+    "accelerated_launch_returncode": 1
+  },
+  "observed_graphics": {
+    "session": {
+      "plasma_version": "6",
+      "type": "wayland",
+      "wayland_display_present": true,
+      "x_display_present": true
+    },
+    "kwin": {
+      "command": "qdbus6",
+      "fields": {
+        "Compositing Type": "OpenGL",
+        "Driver": "LLVMpipe",
+        "GLSL version": "4.50",
+        "GPU class": "Unknown",
+        "KWin version": "6.3.6",
+        "Mesa version": "25.0.7",
+        "OpenGL renderer string": "llvmpipe (LLVM 19.1.7, 256 bits)",
+        "OpenGL shading language version string": "4.50",
+        "OpenGL vendor string": "Mesa",
+        "OpenGL version": "4.5",
+        "OpenGL version string": "4.5 (Core Profile) Mesa 25.0.7-2+deb13u1",
+        "Operation Mode": "Wayland",
+        "Qt Version": "6.8.2",
+        "Qt compile version": "6.8.2",
+        "Virtual Machine": "no"
+      },
+      "returncode": 0,
+      "status": "ok"
+    },
+    "kscreen_initial_active_mode": [
+      1920,
+      1080
+    ],
+    "kscreen_initial_scale_percent": 105,
+    "kwin_environment_probe": {
+      "pid_probe": {
+        "command": "qdbus6",
+        "returncode": 0,
+        "status": "ok"
+      },
+      "scope": "Allowlisted initial environment of the session D-Bus KWin owner; runtime environment changes are not captured.",
+      "status": "unreadable",
+      "variables": {}
+    },
+    "renderer_override_scope": "Collector process environment only; does not establish KWin's process environment.",
+    "selected_journal_messages": [
+      "kwin_wayland_drm: The main thread was hanging temporarily!",
+      "kwin_core: Applying output config failed!"
+    ],
+    "limits": "Initial no-input black frames, later complete Daylight frame and Not Responding Welcome frame observed. Inactive-output/DPMS captures are not counted as blank-redraw failures. No cause or accelerated/hardware stability certification inferred."
+  },
+  "operations": [
+    {
+      "stage": "baseline",
+      "started_utc": "2026-10-14T04:53:25+00:00",
+      "operation": {
+        "status": "observation_only"
+      },
+      "actual_outputs_after": [
+        {
+          "mode": {
+            "height": 1080,
+            "id": "1",
+            "refresh_rate_hz": 74.99800109863281,
+            "width": 1920
+          },
+          "scale": 1.05
+        }
+      ],
+      "saved_preferences_after": {
+        "kdeglobals": {
+          "Icons.Theme": "SpicySoft",
+          "KDE.widgetStyle": "kvantum"
+        },
+        "kwinrc": {
+          "Plugins.blurEnabled": "true"
+        }
+      },
+      "source": "distro/build/vm/late-vt-software/guest-final/baseline-045325-diag.json"
+    },
+    {
+      "stage": "mode-1080",
+      "started_utc": "2026-10-14T04:54:52+00:00",
+      "operation": {
+        "reason": "requires_exactly_one_active_output",
+        "requested_resolution": [
+          1920,
+          1080
+        ],
+        "requested_scale": 1,
+        "status": "skipped"
+      },
+      "actual_outputs_after": [],
+      "saved_preferences_after": {
+        "kdeglobals": {
+          "Icons.Theme": "SpicySoft",
+          "KDE.widgetStyle": "kvantum"
+        },
+        "kwinrc": {
+          "Plugins.blurEnabled": "true"
+        }
+      },
+      "source": "distro/build/vm/late-vt-software/guest-final/mode-1080-045452-diag.json"
+    },
+    {
+      "stage": "night",
+      "started_utc": "2026-10-14T05:06:09+00:00",
+      "operation": {
+        "command": "spicy-appearance",
+        "elapsed_seconds": 18.109,
+        "interpretation": "Command result only. Exit 2 means settings saved with incomplete refresh. Visual verification remains untested.",
+        "request": [
+          "--theme",
+          "night-prowl"
+        ],
+        "returncode": 0,
+        "status": "returned"
+      },
+      "actual_outputs_after": [
+        {
+          "mode": {
+            "height": 1080,
+            "id": "1",
+            "refresh_rate_hz": 74.99800109863281,
+            "width": 1920
+          },
+          "scale": 1.05
+        }
+      ],
+      "saved_preferences_after": {
+        "kdeglobals": {},
+        "kwinrc": {
+          "Plugins.blurEnabled": "true"
+        },
+        "spicyrc": {
+          "Appearance.Theme": "night-prowl"
+        }
+      },
+      "source": "distro/build/vm/late-vt-software/guest-final/night-050609-diag.json"
+    },
+    {
+      "stage": "reduced-on",
+      "started_utc": "2026-10-14T05:06:56+00:00",
+      "operation": {
+        "command": "spicy-appearance",
+        "elapsed_seconds": 1.753,
+        "interpretation": "Command result only. Exit 2 means settings saved with incomplete refresh. Visual verification remains untested.",
+        "request": [
+          "--reduced-motion",
+          "on"
+        ],
+        "returncode": 0,
+        "status": "returned"
+      },
+      "actual_outputs_after": [
+        {
+          "mode": {
+            "height": 1080,
+            "id": "1",
+            "refresh_rate_hz": 74.99800109863281,
+            "width": 1920
+          },
+          "scale": 1.05
+        }
+      ],
+      "saved_preferences_after": {
+        "kdeglobals": {
+          "KDE.AnimationDurationFactor": "0"
+        },
+        "kwinrc": {
+          "Plugins.blurEnabled": "true"
+        },
+        "spicyrc": {
+          "Appearance.ReducedMotion": "true",
+          "Appearance.Theme": "night-prowl"
+        }
+      },
+      "source": "distro/build/vm/late-vt-software/guest-final/reduced-on-050656-diag.json"
+    },
+    {
+      "stage": "apps",
+      "started_utc": "2026-10-14T05:07:22+00:00",
+      "operation": {
+        "applications": {
+          "dolphin": {
+            "command": "systemd-run",
+            "elapsed_seconds": 0.266,
+            "requested_application": "dolphin",
+            "returncode": 0,
+            "status": "returned",
+            "unit": "spicy-vm-probe-dolphin-1791954443",
+            "visual_status": "untested"
+          },
+          "firefox-esr": {
+            "command": "systemd-run",
+            "elapsed_seconds": 0.242,
+            "requested_application": "firefox-esr",
+            "returncode": 0,
+            "status": "returned",
+            "unit": "spicy-vm-probe-firefox-esr-1791954443",
+            "visual_status": "untested"
+          },
+          "kate": {
+            "command": "systemd-run",
+            "elapsed_seconds": 0.114,
+            "requested_application": "kate",
+            "returncode": 0,
+            "status": "returned",
+            "unit": "spicy-vm-probe-kate-1791954443",
+            "visual_status": "untested"
+          }
+        },
+        "status": "launch_requests_recorded"
+      },
+      "actual_outputs_after": [
+        {
+          "mode": {
+            "height": 1080,
+            "id": "1",
+            "refresh_rate_hz": 74.99800109863281,
+            "width": 1920
+          },
+          "scale": 1.05
+        }
+      ],
+      "saved_preferences_after": {
+        "kdeglobals": {
+          "KDE.AnimationDurationFactor": "0"
+        },
+        "kwinrc": {
+          "Plugins.blurEnabled": "true"
+        },
+        "spicyrc": {
+          "Appearance.ReducedMotion": "true",
+          "Appearance.Theme": "night-prowl"
+        }
+      },
+      "source": "distro/build/vm/late-vt-software/guest-final/apps-050722-diag.json"
+    },
+    {
+      "stage": "mode-720",
+      "started_utc": "2026-10-14T05:08:38+00:00",
+      "operation": {
+        "reason": "requested_mode_not_advertised",
+        "requested_resolution": [
+          1280,
+          720
+        ],
+        "requested_scale": 1,
+        "status": "skipped"
+      },
+      "actual_outputs_after": [
+        {
+          "mode": {
+            "height": 1080,
+            "id": "1",
+            "refresh_rate_hz": 74.99800109863281,
+            "width": 1920
+          },
+          "scale": 1.05
+        }
+      ],
+      "saved_preferences_after": {
+        "kdeglobals": {
+          "KDE.AnimationDurationFactor": "0"
+        },
+        "kwinrc": {
+          "Plugins.blurEnabled": "true"
+        },
+        "spicyrc": {
+          "Appearance.ReducedMotion": "true",
+          "Appearance.Theme": "night-prowl"
+        }
+      },
+      "source": "distro/build/vm/late-vt-software/guest-final/mode-720-050838-diag.json"
+    },
+    {
+      "stage": "daylight",
+      "started_utc": "2026-10-14T05:08:42+00:00",
+      "operation": {
+        "command": "spicy-appearance",
+        "elapsed_seconds": 11.096,
+        "interpretation": "Command result only. Exit 2 means settings saved with incomplete refresh. Visual verification remains untested.",
+        "request": [
+          "--theme",
+          "daylight"
+        ],
+        "returncode": 1,
+        "status": "returned"
+      },
+      "actual_outputs_after": [
+        {
+          "mode": {
+            "height": 1080,
+            "id": "1",
+            "refresh_rate_hz": 74.99800109863281,
+            "width": 1920
+          },
+          "scale": 1.05
+        }
+      ],
+      "saved_preferences_after": {
+        "kdeglobals": {
+          "KDE.AnimationDurationFactor": "0"
+        },
+        "kwinrc": {
+          "Plugins.blurEnabled": "true"
+        },
+        "spicyrc": {
+          "Appearance.ReducedMotion": "true",
+          "Appearance.Theme": "night-prowl"
+        }
+      },
+      "source": "distro/build/vm/late-vt-software/guest-final/daylight-050842-diag.json"
+    },
+    {
+      "stage": "lock",
+      "started_utc": "2026-10-14T05:09:08+00:00",
+      "operation": {
+        "command": "qdbus6",
+        "elapsed_seconds": 1.393,
+        "interpretation": "Lock request only. Capture sleeping artwork and unlock interactively before post-unlock stage.",
+        "returncode": 0,
+        "status": "returned"
+      },
+      "actual_outputs_after": [
+        {
+          "mode": {
+            "height": 1080,
+            "id": "1",
+            "refresh_rate_hz": 74.99800109863281,
+            "width": 1920
+          },
+          "scale": 1.05
+        }
+      ],
+      "saved_preferences_after": {
+        "kdeglobals": {
+          "KDE.AnimationDurationFactor": "0"
+        },
+        "kwinrc": {
+          "Plugins.blurEnabled": "true"
+        },
+        "spicyrc": {
+          "Appearance.ReducedMotion": "true",
+          "Appearance.Theme": "night-prowl"
+        }
+      },
+      "source": "distro/build/vm/late-vt-software/guest-final/lock-050908-diag.json"
+    }
+  ],
+  "reviewed_functional_checks": [
+    {
+      "id": "image_boot",
+      "status": "blocked",
+      "notes": "UEFI, automatic authentication and active Plasma Wayland observed; usable-desktop criterion remains blocked by rendering stalls."
+    },
+    {
+      "id": "plymouth_portrait",
+      "status": "pass",
+      "notes": "Approved 7A portrait and continuous growing progress bar observed at 1920x1080."
+    },
+    {
+      "id": "sign_in_lock",
+      "status": "blocked",
+      "notes": "7C sign-in captured in the first run with early VT interventions. An earlier active lock state was observed in the repeat; the later lock request returned 0. Its lock transition, sleeping 7B rendering and successful unlock were not verified."
+    },
+    {
+      "id": "graphics_daylight",
+      "status": "fail",
+      "notes": "KWin main-thread hang warnings and output-configuration failure; Welcome rendered, then Not Responding frame. Full 30-minute interactive/video procedure was not completed."
+    },
+    {
+      "id": "graphics_night_prowl",
+      "status": "blocked",
+      "notes": "Night Prowl command returned 0 and saved preference; complete visual response and 30-minute use were not verified."
+    },
+    {
+      "id": "theme_persistence",
+      "status": "fail",
+      "notes": "Return to Daylight failed after plasma-apply-lookandfeel exceeded 8 seconds. Saved theme remained night-prowl. Sign-out/in persistence was not exercised."
+    },
+    {
+      "id": "secure_boot",
+      "status": "blocked",
+      "notes": "Plain OVMF profile; enforcing Secure Boot was not tested."
+    },
+    {
+      "id": "wifi",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "bluetooth",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "audio",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "webcam",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "suspend_resume",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "battery_power",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "external_display",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "mixed_dpi",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "applications",
+      "status": "blocked",
+      "notes": "Dolphin, Kate and Firefox launch requests returned 0. Dialogs, scrolling, video and separate GTK application interaction were not verified."
+    },
+    {
+      "id": "accessibility",
+      "status": "untested",
+      "notes": ""
+    },
+    {
+      "id": "reduced_motion",
+      "status": "blocked",
+      "notes": "Enable command returned 0; AnimationDurationFactor=0 and ReducedMotion=true observed. Visible animation/interaction acceptance was not verified."
+    }
+  ],
+  "complete_scaling_matrix_status_counts": {
+    "untested": 71,
+    "blocked": 9
+  },
+  "evidence": {
+    "availability": "Full local captures/reports are ignored build artifacts. This checked-in summary retains observations and hashes, not the raw private journals or generated images.",
+    "files": [
+      {
+        "path": "distro/build/vm/late-vt-software/run.json",
+        "sha256": "162841d98de0bbcb86b68b1971380e8fc9eb1e88b849d8eac3e5c9c5be62d9bc"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/vm-profile.json",
+        "sha256": "2cb455e0c0eadaf4c5fad7b59ae18c093c4e2a675dbdcba09a368bd54f963574"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/host-capabilities.json",
+        "sha256": "c75adee57065633917ade611b6af7c8450cf5cf65bbbea819abfe4fb759579af"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/diagnostic-medium.json",
+        "sha256": "4fcd3bff88efe69fa53ecf3c59e9fe2e4b1bd15bce7a005b2720c470a23267ab"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/reviewed-results.json",
+        "sha256": "e9f6a6a23251aca59d67f86f13c4c67e2bb93b638fffbeccd7646558cead67bc"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/reviewed-observations.json",
+        "sha256": "fdfa38e6738a33464ff9dea4d67a58592002b1452b7e9dab8c947e0e3768cb74"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/boot-003.png",
+        "sha256": "fdb6ef86fc47b92b901f54df04709386273ca7d5b8eb458a14a688c789fd1e8a"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/boot-005.png",
+        "sha256": "f1263f0c2b83ad401ced222a252ea8d3f633f3f4c9dbc40293124e84f3c5f850"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/scale-100-early.png",
+        "sha256": "69da84d92590cfca5841c7c3427863df97f205adcbc662237fe5fab4e1b10602"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/display-wake-visual.png",
+        "sha256": "a464a851da0dabf00a226f1afa6be0c6a4660a8690687c9edfde0c41d2d8db23"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/after-reconnect.png",
+        "sha256": "83ea608e6999964cd4644bb481e238135c70f2d5b99195a5b06f2c8457a0a635"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/control.private.log",
+        "sha256": "693ab64c53008a64f147cdbc6d85405b85c2074c946face29d70c2bbd18319de"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/serial.log",
+        "sha256": "33bb3ea9d59497ac74ef6bc60291bf242daf04adf71f1f26860ec87eecb33e3c"
+      },
+      {
+        "path": "distro/build/vm/current-software/sddm-vt1.png",
+        "sha256": "d14281e196d40d22d248cd7788adb22070a20a4bf738c922e6fac54fd2878d32"
+      },
+      {
+        "path": "distro/build/vm/host-preflight-gui.json",
+        "sha256": "792919cc0918f5058f3b9fa31a9a72459debe90c85cd207dbeb3131ffca04177"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/guest-final/lock-050908-guest.json",
+        "sha256": "e18bf3c7a8688158716378e446033c88eeac725e359f4f21d3354bdd8a65687e"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/guest-final/mode-720-050838-diag.json",
+        "sha256": "b83e1bd664c950a02ab9f89e9c3e8940861fe2c2fc5f59fe725d11e5ceb01441"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/guest-final/mode-1080-045452-guest.json",
+        "sha256": "714ffb724129faf6ae2c0dca9367fd388ab86ffdb5ef3f2b95c27d2e15e16588"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/guest-final/daylight-050842-guest.json",
+        "sha256": "665adedfe7080a30335cb62de380df193c5d891f493e392f1fc7c8eb8a1b93e2"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/guest-final/mode-720-050838-guest.json",
+        "sha256": "48f654dae8b9bc75de18385522497924fe0e1d630843cd6dc13d286be6100c1f"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/guest-final/reduced-on-050656-diag.json",
+        "sha256": "842be3d281886aed5ecf46ae4d2627d7998edc90d56ff66ee779e4ab25ea482e"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/guest-final/baseline-045325-guest.json",
+        "sha256": "a8cb3622af23ecaf17137dbd62c02e13bd036ee40c5781adac029efc88fafe40"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/guest-final/night-050609-diag.json",
+        "sha256": "7736fa77c7a57becb06fad078cbf8152bc68deccfa62b0eb3423a28a9d127dbf"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/guest-final/night-050609-guest.json",
+        "sha256": "0683fab053e92d8452a9aa67b22cc28afaf39c18fc66f220222fc2fb41e3070b"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/guest-final/reduced-on-050656-guest.json",
+        "sha256": "721f8b3384a748f6907a92f952ba63304a0eefaac788635f333de03a23c8280f"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/guest-final/apps-050722-diag.json",
+        "sha256": "c08d00bef1e623a0f1c10e4c37d145ad920bbb004fa70dc878af7b9b89d1908b"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/guest-final/baseline-045325-matrix.json",
+        "sha256": "7412a02b62fc972bd0084c6831b96f35f3dabf8d7f453031be5c28837bc02945"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/guest-final/lock-050908-diag.json",
+        "sha256": "78f415b3c46bf553c325e4985343a160d9806a232b0d6f24a584aefcc2137c1c"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/guest-final/daylight-050842-diag.json",
+        "sha256": "4519016f880672a2f4cc83e5bb7dc3b4bb8bc3218f3a0412d5000878e820b1e8"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/guest-final/mode-1080-045452-diag.json",
+        "sha256": "24bb042a46eb03cbaccd6ac6ac5f799c58084d211491bbe99c7922f8531fa89a"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/guest-final/apps-050722-guest.json",
+        "sha256": "01cefe05be9d979a35493c941a98d4c7abfa72adae789ba26a19a899a20cdf41"
+      },
+      {
+        "path": "distro/build/vm/late-vt-software/guest-final/baseline-045325-diag.json",
+        "sha256": "a1cc73988ca0fd993719210b39991f398eeb6cc22bf16396b1b88251cb350819"
+      },
+      {
+        "path": "distro/build/vm/accelerated-attempt.json",
+        "sha256": "371bc7f8ba7db9a1d75ba653aff9e641f0e951a6bcfca62a0c0c81c78e121d9d"
+      },
+      {
+        "path": "distro/build/vm/accelerated-preflight.txt",
+        "sha256": "a0cb4a8314af3bc8a516c319b29cc13f4006f09a3dcdc66e5581d6147bb1075c"
+      },
+      {
+        "path": "distro/build/vm/current-software/run.json",
+        "sha256": "4f53e159eed67e5cb7afd46f0dfdd2c7b78c480994e1a98a396c0f89d14fc13f"
+      },
+      {
+        "path": "distro/build/vm/current-software/serial.log",
+        "sha256": "e386fa03c3ae5f2fc94b7f1c939a4fea98f171ad301d2340d2f867617c71b7f6"
+      },
+      {
+        "path": "distro/build/vm/current-software/vt-startup-analysis.md",
+        "sha256": "ac9a90e25997fd3830b94f35e60f62519aa553607f326ba224a6088a984da441"
+      }
+    ]
+  },
+  "unverified_gates": [
+    "KVM/VirGL interactive graphics",
+    "Successful return to Daylight",
+    "Visible reduced motion",
+    "Sleeping lock artwork and successful unlock",
+    "Application interoperability and sustained use in both themes",
+    "Complete desktop scaling through 4K",
+    "Physical hardware and Secure Boot",
+    "Installer and signed update channel"
+  ]
+}

@@ -1,0 +1,121 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: GPL-2.0-only
+"""Apply explicit user-selected appearance settings without resetting panel layouts."""
+import argparse
+import json
+import subprocess
+import sys
+import time
+
+
+# A stalled desktop must not leave the welcome app busy indefinitely. These
+# limits do not change the graphics backend or interrupt the Plasma session.
+COMMAND_TIMEOUT = 8
+APPLY_TIMEOUT = 30
+REFRESH_TIMEOUT = 4
+SAVED_REFRESH_PENDING = 2
+
+
+def commands(theme=None, reduced=None):
+    result = []
+    refresh = []
+    def config(file, groups, key, value):
+        command = ["kwriteconfig6", "--file", file]
+        for group in groups:
+            command += ["--group", group]
+        result.append(command + ["--key", key, value])
+    if theme:
+        suffix = "NightProwl" if theme == "night-prowl" else "Daylight"
+        # Applying look-and-feel broadcasts a widget-style change. Kvantum
+        # reads its selected theme while the application recreates that style,
+        # so publish the selection before any appearance notifications.
+        config("Kvantum/kvantum.kvconfig", ["General"], "theme", "Spicy" + suffix)
+        result += [["plasma-apply-lookandfeel", "--apply", "org.spicy." + theme + ".desktop"],
+                   ["plasma-apply-colorscheme", "Spicy" + suffix],
+                   ["plasma-apply-cursortheme", "SpicyLittleTip"]]
+        config("kdeglobals", ["KDE"], "widgetStyle", "kvantum")
+        config("kdeglobals", ["Icons"], "Theme", "SpicySoft")
+        for key in ("font", "menuFont", "toolBarFont", "taskbarFont"):
+            config("kdeglobals", ["General"], key, "Atkinson Hyperlegible,10,-1,5,50,0,0,0,0,0")
+        config("kdeglobals", ["General"], "smallestReadableFont", "Atkinson Hyperlegible,9,-1,5,50,0,0,0,0,0")
+        config("kwinrc", ["Plugins"], "blurEnabled", "true")
+        config("kscreenlockerrc", ["Greeter"], "WallpaperPlugin", "org.kde.image")
+        config("kscreenlockerrc", ["Greeter", "Wallpaper", "org.kde.image", "General"], "Image", "file:///usr/share/wallpapers/SpicySleeping/contents/images/3840x2160.png")
+        config("ksplashrc", ["KSplash"], "Theme", "org.spicy." + theme + ".desktop")
+        config("ksplashrc", ["KSplash"], "Engine", "KSplashQML")
+        # On Wayland look-and-feel can save the cursor without notifying KWin;
+        # the cursor tool then sees the saved value and skips its own reload.
+        # Broadcast CursorChanged explicitly. Dispatch is bounded, but a sent
+        # signal does not confirm which cursor a running compositor rendered.
+        refresh.append(["dbus-send", "--session", "--type=signal", "/KGlobalSettings",
+                        "org.kde.KGlobalSettings.notifyChange", "int32:5", "int32:0"])
+        wallpaper = "file:///usr/share/wallpapers/Spicy" + suffix + "/contents/images/3840x2160.png"
+        script = 'var all = desktops(); for (var i=0; i<all.length; ++i) { all[i].wallpaperPlugin="org.kde.image"; all[i].currentConfigGroup=["Wallpaper","org.kde.image","General"]; all[i].writeConfig("Image",' + json.dumps(wallpaper) + '); }'
+        refresh.append(["dbus-send", "--session", "--print-reply", "--reply-timeout=3000", "--dest=org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell.evaluateScript", "string:" + script])
+    if reduced is not None:
+        config("kdeglobals", ["KDE"], "AnimationDurationFactor", "0" if reduced else "1")
+    # Record the welcome app's preferences after the KDE configuration writes
+    # succeed, so a failed write does not advertise a completed selection.
+    if theme:
+        config("spicyrc", ["Appearance"], "Theme", theme)
+    if reduced is not None:
+        config("spicyrc", ["Appearance"], "ReducedMotion", "true" if reduced else "false")
+    if theme or reduced is not None:
+        refresh.append(["dbus-send", "--session", "--print-reply", "--reply-timeout=3000", "--dest=org.kde.KWin", "/KWin", "org.kde.KWin.reconfigure"])
+    return result + refresh
+
+
+def run_action(action, timeout):
+    destination = next((arg.removeprefix("--dest=") for arg in action if arg.startswith("--dest=")), None)
+    label = action[0] + (f" ({destination})" if destination else "")
+    try:
+        subprocess.run(action, check=True, timeout=timeout, capture_output=True, text=True)
+    except subprocess.TimeoutExpired:
+        print(f"{label} did not respond within {timeout:g} seconds.", file=sys.stderr)
+        return False
+    except (OSError, subprocess.CalledProcessError) as error:
+        print(f"{label} failed: {error}", file=sys.stderr)
+        if isinstance(error, subprocess.CalledProcessError) and error.stderr:
+            print(error.stderr.strip(), file=sys.stderr)
+        return False
+    return True
+
+
+def apply(actions):
+    deadline = time.monotonic() + APPLY_TIMEOUT
+    required = [action for action in actions if action[0] != "dbus-send"]
+    refresh = [action for action in actions if action[0] == "dbus-send"]
+    for action in required:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            print("Appearance changes took too long. Try again when the desktop is responding.", file=sys.stderr)
+            return 1
+        if not run_action(action, min(COMMAND_TIMEOUT, remaining)):
+            return 1
+    # Each refresh gets its own bounded attempt: a busy shell must not prevent
+    # KWin from reloading, and a refresh failure does not undo saved settings.
+    pending = False
+    for action in refresh:
+        if not run_action(action, REFRESH_TIMEOUT):
+            pending = True
+    if pending:
+        print("Preferences saved; the desktop refresh is incomplete. Try again when the desktop is responding.", file=sys.stderr)
+        return SAVED_REFRESH_PENDING
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--theme", choices=("daylight", "night-prowl"))
+    parser.add_argument("--reduced-motion", choices=("on", "off"))
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+    actions = commands(args.theme, None if args.reduced_motion is None else args.reduced_motion == "on")
+    if args.dry_run:
+        print(json.dumps(actions, indent=2))
+        return 0
+    return apply(actions)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

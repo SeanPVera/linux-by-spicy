@@ -1,0 +1,11 @@
+/build/
+/dist/
+/live/cache/
+/live/chroot/
+/live/binary/
+/live/local/
+/live/.build/
+/live/*.iso
+/live/*.log
+__pycache__/
+.pytest_cache/

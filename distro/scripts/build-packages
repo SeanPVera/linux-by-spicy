@@ -1,0 +1,9 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+set -eu
+repo="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)"
+docker build -t spicy-builder:alpha -f "$repo/distro/tools/Dockerfile" "$repo/distro/tools"
+docker run --rm --user "$(id -u):$(id -g)" \
+    -e XDG_CACHE_HOME=/tmp/spicy-cache \
+    --mount "type=bind,src=$repo,dst=/src" \
+    spicy-builder:alpha python3 distro/tools/build.py

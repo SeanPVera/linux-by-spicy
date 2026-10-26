@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+# live-config only creates the session account when this package is present.
+test -x /usr/lib/user-setup/user-setup-apply
+plymouth-set-default-theme spicy
+update-initramfs -u -k all
+systemctl enable sddm.service

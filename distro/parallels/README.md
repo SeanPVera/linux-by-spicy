@@ -51,9 +51,10 @@ it does not create an ARM64 Spicy live ISO or a signed update repository.
    ```
 
    Sign out and select a Plasma Wayland session, then sign in. Parallels Tools
-   are optional integration software: install them only through the current
-   Parallels **Actions → Install Parallels Tools** flow if needed, following
-   [Parallels' Linux guide](https://kb.parallels.com/en/115835). Check its
+   are optional integration software. If needed, follow
+   [Parallels' Linux guide](https://kb.parallels.com/en/129740) using
+   `prl-tools-lin-arm.iso` from your installed Parallels application. The guide
+   describes attaching it through **Devices → CD/DVD → Connect image**. Check its
    [kernel compatibility guidance](https://kb.parallels.com/en/129963) for your
    installed Parallels version before changing kernels.
 

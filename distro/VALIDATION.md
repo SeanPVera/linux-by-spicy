@@ -5,13 +5,12 @@
 - Five asset checks cover the compiled cursor sizes and click hotspots,
   disconnected tip/paw silhouettes, wallpaper exports, text contrast and
   the approved art selections.
-- Twenty-four additional behavior checks cover stalled appearance subprocesses,
-  Qt process failure/retry handling, and evidence collection with missing tools,
-  checksum failures, private-field filtering, firmware access failures and the
-  distinction between collector and KWin process environments. Twelve VM
-  launcher checks cover independent CPU/graphics choices, blocked prerequisites,
-  bounded probes, retained launch metadata and evidence preservation.
-  The combined automated suite contains 41 passing tests.
+- Behavior checks cover stalled appearance subprocesses, Qt process failure and
+  retry handling, evidence filtering, installed appearance observations, and
+  interrupted desktop probes with surviving descendants. VM launcher checks
+  cover independent CPU/graphics choices, blocked prerequisites, bounded probes
+  and evidence preservation. The alpha2 automated suite contains 65 passing
+  tests; the unchanged alpha1 baseline passes its original 41 tests.
 - Real Qt renders exercise 80 welcome layouts and 40 sign-in layouts across
   ten physical resolutions, from 1024×768 through 3840×2160, at 100%, 125%,
   150% and 200% scaling. The actual Atkinson Hyperlegible font is loaded.
@@ -21,6 +20,99 @@
   pass their format checks, and the live-build profile validates.
 - The release-identity package passes install, reinstall and removal checks;
   removal restores Debian's original identity.
+
+## Alpha2 appearance fixes and recovered validation tools
+
+The 2026-10-26 continuation recovered the earlier uncommitted work and verified
+it afresh. The recovered implementation was first saved in local source commit
+`2693ed27876bd55fa3e477ea0dbd2498c5865138`.
+
+The appearance helper now saves the Kvantum selection before applying
+look-and-feel. A controlled native Qt 6.8.2/Kvantum check reproduces the previous
+palette on all three Daylight → Night Prowl → Daylight selections with the old
+helper, and the requested palette on all three with alpha2. The retained
+`check-appearance-refresh.py`, included in `check-native`, uses Qt's native style
+plugin and requires normal process teardown. Its controlled style recreation
+does not establish the palette of a running Konsole or complete Plasma desktop.
+
+Theme changes also broadcast KDE's `CursorChanged` notification after saving
+settings. A private D-Bus test receives the actual `notifyChange(int32 5,
+int32 0)` signal at `/KGlobalSettings`. This verifies transport and signature;
+KWin selection, visible paw artwork, fallback behavior and hotspot clicks still
+need a desktop run. An isolated check using real `kwriteconfig6` writes and
+fresh Welcome processes confirms saved theme and reduced-motion settings; its
+Plasma commands are stubbed, so sign-out and reboot persistence remain untested.
+
+The new `spicy-desktop-test` records helper hashes, bounded operation timings,
+saved settings, KWin cursor observations and optional pointer-inclusive captures.
+It rejects root execution, preserves previous evidence, stops on failed desktop
+access or captures, and cleans up its own process groups after timeouts,
+interruptions or an early-exiting window probe. Raw outputs remain private and
+visual checks remain unreviewed. See the
+[installed desktop workflow](VM_VALIDATION.md#installed-desktop-follow-up).
+
+All 72 compared regular artwork, cursor, wallpaper, Plymouth and palette files
+match the alpha1 baseline byte for byte. The alpha2 packages build successfully.
+Disposable package checks cover artwork/desktop unpack, alpha1-to-alpha2 upgrade
+and purge; those checks do not configure the complete KDE dependency set.
+The installed collector correctly returns its explicit desktop blocker in a
+container without a live session, with no theme requests and no visual passes.
+Release-identity install/reinstall/removal preserves foreign diversions and
+restores Debian. The live-overlay regression and 20 native Plymouth renders
+also pass. No accelerated or physical validation is implied by these checks.
+
+## Alpha2 live image
+
+The new amd64 ISO was built from
+`0f80037ef3526a17bf588c926f3c6b5140bf6459`. Its SHA-256 is
+`0fe59b786ce1ffe51bfc117147eea6f8a3a75f59932ecd23bc644a606cbf27ca`
+and its size is 1,877,213,184 bytes. The checksum verifies. The live-build
+stages completed in 488 seconds after resolving the screenshot package as
+Debian's `kde-spectacle`.
+
+The package builder records the completed package version. Image staging uses
+that version explicitly and removes earlier Spicy archives from the generated
+profile while retaining them in `dist`. A mixed-version fixture retained all
+three alpha1 archives beside alpha2; only the three alpha2 archives were staged.
+
+Inspection extracts the filesystem from the actual ISO and verifies that it
+matches the built SquashFS. All three Spicy packages are configured at
+`0.1.0~alpha2`; Spectacle, Konsole and the KWin/KScreen query tools are installed.
+The installed appearance helper, collector and desktop test match the source
+byte for byte, as do all 72 checked asset files against the alpha1 baseline.
+
+A separate 300-second QEMU/TCG software boot used fresh OVMF variables, two
+virtual CPUs, 4 GiB RAM, virtio-vga requesting 1920×1080, no network and no hard
+disk. It received no guest input. Six timed QMP captures were retained. The
+first frame passes the approved-portrait and continuous-track comparison;
+some intermediate frames are black. The 225- and 270-second captures show the
+Daylight desktop and Welcome window. The launcher returned 124 at its declared
+time limit. These captures establish those rendered frames, not responsiveness,
+successful theme switching, the guest renderer, fractional scale or sustained
+stability.
+
+A second software boot reached the same desktop, then received a read-only
+diagnostic USB medium and explicit QMP keyboard input. Ctrl+Alt+T opened Konsole.
+The installed test ran as the `spicy` desktop user; its helper, collector and test
+hashes match the source. Guest-only mount and serial-device permission changes
+allowed a bounded JSON export. These interventions and the supplemental medium
+are recorded separately from the unchanged distribution ISO.
+
+The live KWin query confirms Wayland, KWin 6.3.6, Qt 6.8.2 and Mesa 25.0.7
+llvmpipe. KWin reports `SpicyLittleTip`, size 32. KWin and active-output probes
+succeed, but the initial Spectacle pointer capture exceeds its 25-second limit.
+The tool cleans up that process group and returns `blocked_capture`/exit 2 before
+any theme-change request. It does not bypass the capture check or mark visual
+acceptance. The timeout's cause remains undetermined. Selected cursor identity
+does not establish pointer pixels or hotspot clicks; actual palette cycling,
+reduced motion, lock/unlock, persistence and sustained use still need a capable
+desktop run. No renderer defaults or process-environment overrides were changed.
+
+The accelerated launch was rejected before QEMU started, with exit 1: this
+host exposes neither a usable `/dev/kvm` nor `/dev/dri/renderD128`. No fallback
+was used for that attempt. The software profile is a separate diagnostic run.
+The [reviewed alpha2 summary](validation/2026-10-26-alpha2.json) records exact
+artifacts, checks and remaining acceptance gates.
 
 ## Graphics and boot continuation
 
@@ -270,8 +362,8 @@ accelerated campaign remain separate gates.
 
 ## Remaining release gates
 
-The earlier software-only VM produced KWin rendering stalls and D-Bus timeouts;
-the rebuilt image also exhibited incomplete redraws after successful login.
+The earlier alpha1 software VM produced KWin rendering stalls and D-Bus timeouts;
+its rebuilt image also exhibited incomplete redraws after successful login.
 The complete interactive appearance flow needs another pass with accelerated
 graphics. The native Qt layout checks do not certify the complete Plasma desktop
 at every resolution. Native Plymouth rendering now passes; the complete boot

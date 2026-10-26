@@ -9,7 +9,7 @@
   retry handling, evidence filtering, installed appearance observations, and
   interrupted desktop probes with surviving descendants. VM launcher checks
   cover independent CPU/graphics choices, blocked prerequisites, bounded probes
-  and evidence preservation. The alpha2 automated suite contains 65 passing
+  and evidence preservation. The alpha2 automated suite contains 66 passing
   tests; the unchanged alpha1 baseline passes its original 41 tests.
 - Real Qt renders exercise 80 welcome layouts and 40 sign-in layouts across
   ten physical resolutions, from 1024×768 through 3840×2160, at 100%, 125%,
@@ -113,6 +113,36 @@ host exposes neither a usable `/dev/kvm` nor `/dev/dri/renderD128`. No fallback
 was used for that attempt. The software profile is a separate diagnostic run.
 The [reviewed alpha2 summary](validation/2026-10-26-alpha2.json) records exact
 artifacts, checks and remaining acceptance gates.
+
+An independent follow-up omitted capture requests from the state-only cycle.
+The capture-failure report remains intact; regression coverage verifies that a
+separate state-only run can proceed without retrying capture or upgrading visual
+acceptance. The Daylight helper returned 1 after 9.608 seconds because
+`plasma-apply-lookandfeel` exceeded its 8-second limit. The subsequent KScreen
+probe also timed out, so Night Prowl was never requested. KWin queries still
+responded and retained `SpicyLittleTip`, size 32. The initial active output was
+1920×1080 at 105% scaling and approximately 75 Hz, outside the advertised native
+layout scale cases.
+
+Independent reduced-motion on/off requests both returned 0, in 2.785 and 1.902
+seconds. Fresh Welcome processes read the saved preference as true and false,
+respectively. This verifies application-restart preference reads in the real
+session; visible animation, sign-out and reboot persistence remain untested.
+
+A single distinct Spectacle probe requested only the current screen, without
+the pointer, and used a 35-second diagnostic bound. It also timed out without
+an image and emitted `libEGL warning: egl: failed to create dri2 screen`. One
+newline-terminated copy of that warning exactly matches the original capture's
+50-byte stderr hash. Supported command-line options were confirmed against the
+installed binary. These findings identify an EGL initialization failure, but
+do not establish the exact blocking call or root cause. No permission denial was
+observed, and no identical pointer-capture attempt was repeated.
+
+Ordinary QMP framebuffer captures succeeded at the state/motion milestones.
+They are explicitly labelled ordinary host screenshots and provide no pointer
+pixel or hotspot proof. The VM was shut down after the export. The ISO checksum
+and all five packaged runtime helpers match the final tested source; later test
+and documentation additions do not change those deployed bytes.
 
 ## Graphics and boot continuation
 

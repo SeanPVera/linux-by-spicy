@@ -2,7 +2,7 @@
   "schema_version": 1,
   "source_commit": "0f80037ef3526a17bf588c926f3c6b5140bf6459",
   "baseline_commit": "ab21680dc5ecb10eeffd6cb4cc5f5b53b1dca03d",
-  "review_status": "Local alpha2 candidate; complete desktop, accelerated graphics and hardware acceptance remain incomplete.",
+  "review_status": "Local alpha2 candidate. Independent motion/settings checks pass; full theme cycling, pointer capture, accelerated graphics and hardware acceptance remain incomplete.",
   "image": {
     "name": "spicy-linux-0.1-alpha-amd64.iso",
     "sha256": "0fe59b786ce1ffe51bfc117147eea6f8a3a75f59932ecd23bc644a606cbf27ca",
@@ -14,10 +14,13 @@
   "checks": {
     "python_tests": {
       "baseline_passed": 41,
-      "candidate_passed": 65,
+      "candidate_passed": 66,
       "candidate_failed": 0,
-      "cache_write_warnings": 2,
-      "cache_ownership_restored": true
+      "cache_write_warnings": 0,
+      "cache_ownership_restored": true,
+      "earlier_verified_passed": 65,
+      "earlier_cache_write_warnings": 2,
+      "tested_commit": "a31939293daf04d0ab52838172cb8ef5bd442e9b"
     },
     "native_qt": {
       "welcome_layouts": 80,
@@ -527,6 +530,166 @@
       "path": "distro/build/validation/2026-10-26/interactive-boot/test-started.png",
       "size_bytes": 224541,
       "sha256": "6e3ec1b2201954dbe66d261f24ed853ac86c4e661c7206e15cee185a851d5d36"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-followup-result.json",
+      "size_bytes": 63612,
+      "sha256": "2a142939ac20b0f64c2d01e05ab9e3e4e824ef4397c336ca479248de8e322435"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-followup.iso",
+      "size_bytes": 391168,
+      "sha256": "674daad11522eb96580e55d7a5c8b1e788271efb50ffaa47ae902e2c87b04669"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-followup-payload/run.py",
+      "size_bytes": 4867,
+      "sha256": "4a184aad91326540f9a4112b39cc7d6ed701a5b38cb8c4e082a135a740a57393"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/qmp-state-followup.py",
+      "size_bytes": 2239,
+      "sha256": "d61f41e8a894d745d39d2324932bc564d8650b898ca0e140f0d7798efb5f8dc9"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/watch-state-frames.py",
+      "size_bytes": 1550,
+      "sha256": "9bda339954ecc17463b657884aeaa90cb9922447bab654f3bcf863639ae49420"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-launch.log",
+      "size_bytes": 817,
+      "sha256": "7e4c5f4a1cf1b054f4ee4eaa0b85c069fc554d63c73da43727331e2244241237"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-frame-observer.log",
+      "size_bytes": 216,
+      "sha256": "4b05cf2b8c72f7f5adc14c7999dfd9625c87023bbfff8e5598a990d602b74491"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/tests-state-followup.log",
+      "size_bytes": 99,
+      "sha256": "21bacd560d5b0ce0ffa2dba5a05354373b2edd4e4af06984f6eae662eceb8548"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/final-helper-hashes.json",
+      "size_bytes": 578,
+      "sha256": "5a30abdb6e34abe2f5fc4f82f926df14721f0193b75c301af37a340770473179"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/artifact-checksums.log",
+      "size_bytes": 153,
+      "sha256": "027f96cd8fc22923fa7781028f48817c754b11638aa2a6be32494aa453f48d2e"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/spectacle-help.log",
+      "size_bytes": 4010,
+      "sha256": "01394059796cfbfcb385d68594ca666929e8ac6daeb0da47946f1dea83f02efc"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/attached-media.json",
+      "size_bytes": 272,
+      "sha256": "baa51f697afe40ecc5bf402656915dfe8f18a9aaf7674b10a630f483304381eb"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/before-state-test.json",
+      "size_bytes": 167,
+      "sha256": "56051461baf58d1138d1d61c82c28de110c445bb9ca36d5dac29a2b564d64604"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/host-capabilities.json",
+      "size_bytes": 2260,
+      "sha256": "34b786abb49c13be98033804f75f56409b05fd1b492856c82936a72f6ea58e96"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/interventions.json",
+      "size_bytes": 322,
+      "sha256": "d2f6b85a77215d72c8e0d149e9a084c342a21f222299866faf1d0f450d4dc34e"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/ordinary-00-before.json",
+      "size_bytes": 236,
+      "sha256": "3997688ab5c2cd8e2b9489773f7f5a133f67cf40d09d640e200347f100270fa4"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/ordinary-01-daylight.json",
+      "size_bytes": 240,
+      "sha256": "d87e902e734ab88b9c8fcd4c250e2dfba7cf8fcbe2d8229f7690999ea400621c"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/ordinary-motion-off-complete.json",
+      "size_bytes": 243,
+      "sha256": "360518a930cf20b579426fa10d1efbeb52ac3f3bdfe5c5e2b2a087ceb9c50786"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/ordinary-motion-on-complete.json",
+      "size_bytes": 241,
+      "sha256": "a15b938b7a25cf9b14e8bba1853d62fe86a8e1b48b22b627bcd97c3dd09fafd0"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/ordinary-ordinary-probe-complete.json",
+      "size_bytes": 251,
+      "sha256": "a7137e6619f10588155cd1aafc198a723c510f10260caa521f5274000f3aeebf"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/run.json",
+      "size_bytes": 1527,
+      "sha256": "e6e3869f31387ebe19cb554ac4309873b46d85e693545e29cf1c744c37db9894"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/state-terminal-later.json",
+      "size_bytes": 170,
+      "sha256": "7e93602318a4dc674a3d1e483113c61b4b8dcfd90c9fa8603c66192a80600e87"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/state-terminal.json",
+      "size_bytes": 164,
+      "sha256": "18a70792630f23431fec5c657b6e28c92a4b83935cf3c8ce42b18a45c2dd3122"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/vm-profile.json",
+      "size_bytes": 435,
+      "sha256": "2cb455e0c0eadaf4c5fad7b59ae18c093c4e2a675dbdcba09a368bd54f963574"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/before-state-test.png",
+      "size_bytes": 334577,
+      "sha256": "e5dbffd49fce63f307500528f21a6b3c5cb26a4e33ee39ef7c984baef9632be8"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/ordinary-00-before.png",
+      "size_bytes": 216834,
+      "sha256": "39a41eb306c53f2823e2a051f34d4c98683b8c4dd228469b5f5a23a95ff4b1d6"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/ordinary-01-daylight.png",
+      "size_bytes": 216834,
+      "sha256": "39a41eb306c53f2823e2a051f34d4c98683b8c4dd228469b5f5a23a95ff4b1d6"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/ordinary-motion-off-complete.png",
+      "size_bytes": 216304,
+      "sha256": "dab9b57492c3717932a3c8672dd772d979d47a25332f0dd423f8b0afce763e23"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/ordinary-motion-on-complete.png",
+      "size_bytes": 216834,
+      "sha256": "39a41eb306c53f2823e2a051f34d4c98683b8c4dd228469b5f5a23a95ff4b1d6"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/ordinary-ordinary-probe-complete.png",
+      "size_bytes": 216304,
+      "sha256": "dab9b57492c3717932a3c8672dd772d979d47a25332f0dd423f8b0afce763e23"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/state-terminal-later.png",
+      "size_bytes": 196259,
+      "sha256": "cc8160cd550e4b8151205bedc44873f906abee080c427f7ce216874541d5ba8a"
+    },
+    {
+      "path": "distro/build/validation/2026-10-26/state-boot/state-terminal.png",
+      "size_bytes": 415762,
+      "sha256": "ced78f066a108dfddde876593dad373f10c5c96fb6de6fb6d176cc9baec881e1"
     }
   ],
   "installed_desktop_followup": {
@@ -713,5 +876,203 @@
     "The live build rejected the executable name spectacle as a package name. Metadata/profile/guide now use Debian kde-spectacle.",
     "One asset-test attempt overlapped staging recreation; verification was rerun after package generation completed.",
     "The old helper is an expected failing palette control; the early-exit process cleanup regression failed before its fix and passes in the final 65-test suite."
-  ]
+  ],
+  "runtime_helpers_match_tested_commit": {
+    "tested_source_commit": "a31939293daf04d0ab52838172cb8ef5bd442e9b",
+    "all_match": true,
+    "helpers": {
+      "spicy-appearance": "11a258620b9ad52e27c1d411ed3e36d28af1037530f1d19e0a7793e995b63395",
+      "spicy-desktop-test": "96ced8f57657080049e6d02e009fd11ee2f1dece5761ea41c9cd1653da357466",
+      "spicy-first-login": "35bb48b3b7f47a17a13e0d81f445b197d15e6cb98d22e797573e68c3c5ca49c9",
+      "spicy-hardware-report": "2b3df3942edbff8e62e15da4ae42727c174d05e7bc083102b137032aa1773643",
+      "spicy-welcome": "bf0b5ebd3c2d15e9f97a79c64797dfadc9f60cda06d23e97032115bd008280b5"
+    }
+  },
+  "independent_state_campaign": {
+    "status": "partial",
+    "run": {
+      "started_utc": "2026-10-26T14:23:08.963141+00:00",
+      "finished_utc": "2026-10-26T14:32:05.734021+00:00",
+      "status": "exited",
+      "iso_sha256": "0fe59b786ce1ffe51bfc117147eea6f8a3a75f59932ecd23bc644a606cbf27ca"
+    },
+    "capture_policy": "No pointer capture requested by state-only cycle; previous pointer-capture failure retained separately.",
+    "state_cycle": {
+      "outcome": "cycle_incomplete",
+      "returncode": 1,
+      "commands": [
+        {
+          "label": "packages",
+          "status": "returned",
+          "returncode": 0,
+          "elapsed_seconds": 0.121789
+        },
+        {
+          "label": "00-before-kwin",
+          "status": "returned",
+          "returncode": 0,
+          "elapsed_seconds": 3.30699
+        },
+        {
+          "label": "00-before-display",
+          "status": "returned",
+          "returncode": 0,
+          "elapsed_seconds": 2.120944
+        },
+        {
+          "label": "logs-before",
+          "status": "returned",
+          "returncode": 0,
+          "elapsed_seconds": 0.14915
+        },
+        {
+          "label": "01-daylight-apply",
+          "status": "returned",
+          "returncode": 1,
+          "elapsed_seconds": 9.608275
+        },
+        {
+          "label": "01-daylight-kwin",
+          "status": "returned",
+          "returncode": 0,
+          "elapsed_seconds": 3.729478
+        },
+        {
+          "label": "01-daylight-display",
+          "status": "timeout",
+          "returncode_after_cleanup": -15,
+          "timeout_seconds": 8,
+          "elapsed_seconds": 8.121573
+        },
+        {
+          "label": "logs-test",
+          "status": "returned",
+          "returncode": 0,
+          "elapsed_seconds": 0.05019
+        }
+      ],
+      "theme_requests": 1,
+      "night_prowl_requested": false,
+      "reason": "plasma-apply-lookandfeel exceeded 8 seconds; subsequent KScreen probe also exceeded 8 seconds."
+    },
+    "motion_preference_checks": [
+      {
+        "requested": "on",
+        "returncode": 0,
+        "elapsed_seconds": 2.785443,
+        "fresh_welcome_process": {
+          "theme": "daylight",
+          "reduced_motion": true
+        },
+        "fresh_process_returncode": 0
+      },
+      {
+        "requested": "off",
+        "returncode": 0,
+        "elapsed_seconds": 1.901882,
+        "fresh_welcome_process": {
+          "theme": "daylight",
+          "reduced_motion": false
+        },
+        "fresh_process_returncode": 0
+      }
+    ],
+    "persistence_scope": "Fresh Welcome processes read saved booleans in the real live session; sign-out and reboot persistence were not tested.",
+    "initial_active_outputs": [
+      {
+        "name": "Virtual-1",
+        "scale": 1.05,
+        "mode": {
+          "id": "1",
+          "name": "1920x1080@75",
+          "refreshRate": 74.99800109863281,
+          "size": {
+            "height": 1080,
+            "width": 1920
+          }
+        }
+      }
+    ],
+    "post_attempt_cursor": {
+      "status": "ok",
+      "themeName": "SpicyLittleTip",
+      "themeSize": 32,
+      "omitted_invalid_fields": []
+    },
+    "ordinary_capture_probe": {
+      "argv": [
+        "spectacle",
+        "--background",
+        "--nonotify",
+        "--current",
+        "--delay",
+        "0",
+        "--output",
+        "/tmp/spicy-alpha2-extra/ordinary.png"
+      ],
+      "returncode": -15,
+      "timed_out": true,
+      "elapsed_seconds": 35.153878,
+      "stdout": "",
+      "stderr": "libEGL warning: egl: failed to create dri2 screen\nlibEGL warning: egl: failed to create dri2 screen\n",
+      "process_samples": [
+        {
+          "elapsed_seconds": 5.023,
+          "wchan": "0"
+        },
+        {
+          "elapsed_seconds": 10.041,
+          "wchan": "do_sys_poll"
+        },
+        {
+          "elapsed_seconds": 15.045,
+          "wchan": "do_sys_poll"
+        },
+        {
+          "elapsed_seconds": 20.049,
+          "wchan": "do_sys_poll"
+        },
+        {
+          "elapsed_seconds": 25.053,
+          "wchan": "do_sys_poll"
+        },
+        {
+          "elapsed_seconds": 30.058,
+          "wchan": "do_sys_poll"
+        },
+        {
+          "elapsed_seconds": 35.009,
+          "wchan": "0"
+        }
+      ],
+      "pointer_requested": false,
+      "image_present": false
+    },
+    "capture_diagnosis": {
+      "supported_cli_verified": true,
+      "original_stderr_identified_by_exact_hash": true,
+      "original_stderr_message": "libEGL warning: egl: failed to create dri2 screen",
+      "original_stderr_sha256": "f313182961023ad3e768cb1147d64f26daa5fa8e2c6453f29c59da6761ce14a4",
+      "ordinary_probe_timeout_seconds": 35,
+      "finding": "Both Spectacle paths emitted the same EGL DRI2-screen initialization warning and produced no image. The exact blocking call/root cause remains unproven; no permission denial was observed."
+    },
+    "ordinary_host_screenshots": {
+      "count": 5,
+      "kind": "QMP framebuffer",
+      "pointer_or_hotspot_proof": false,
+      "scope": "Ordinary visual evidence only; no complete theme-cycle visual pass."
+    },
+    "supplemental_media": {
+      "path": "/src/distro/build/validation/2026-10-26/state-followup.iso",
+      "sha256": "674daad11522eb96580e55d7a5c8b1e788271efb50ffaa47ae902e2c87b04669",
+      "readonly": true,
+      "device": "usb-storage",
+      "purpose": "Supplemental test runner; distribution ISO unchanged."
+    },
+    "guest_interventions": {
+      "input": "Ctrl+Alt+T followed by the recorded command in the live desktop Konsole",
+      "command": "sudo mkdir -p /mnt/spicytest; sudo mount /dev/sda /mnt/spicytest; sudo chmod 666 /dev/ttyS0; python3 /mnt/spicytest/run.py",
+      "note": "Guest-only mount and serial permissions; no host permission or renderer changes."
+    }
+  }
 }

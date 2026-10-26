@@ -26,10 +26,13 @@ def commands(theme=None, reduced=None):
         result.append(command + ["--key", key, value])
     if theme:
         suffix = "NightProwl" if theme == "night-prowl" else "Daylight"
+        # Applying look-and-feel broadcasts a widget-style change. Kvantum
+        # reads its selected theme while the application recreates that style,
+        # so publish the selection before any appearance notifications.
+        config("Kvantum/kvantum.kvconfig", ["General"], "theme", "Spicy" + suffix)
         result += [["plasma-apply-lookandfeel", "--apply", "org.spicy." + theme + ".desktop"],
                    ["plasma-apply-colorscheme", "Spicy" + suffix],
                    ["plasma-apply-cursortheme", "SpicyLittleTip"]]
-        config("Kvantum/kvantum.kvconfig", ["General"], "theme", "Spicy" + suffix)
         config("kdeglobals", ["KDE"], "widgetStyle", "kvantum")
         config("kdeglobals", ["Icons"], "Theme", "SpicySoft")
         for key in ("font", "menuFont", "toolBarFont", "taskbarFont"):
@@ -40,6 +43,12 @@ def commands(theme=None, reduced=None):
         config("kscreenlockerrc", ["Greeter", "Wallpaper", "org.kde.image", "General"], "Image", "file:///usr/share/wallpapers/SpicySleeping/contents/images/3840x2160.png")
         config("ksplashrc", ["KSplash"], "Theme", "org.spicy." + theme + ".desktop")
         config("ksplashrc", ["KSplash"], "Engine", "KSplashQML")
+        # On Wayland look-and-feel can save the cursor without notifying KWin;
+        # the cursor tool then sees the saved value and skips its own reload.
+        # Broadcast CursorChanged explicitly. Dispatch is bounded, but a sent
+        # signal does not confirm which cursor a running compositor rendered.
+        refresh.append(["dbus-send", "--session", "--type=signal", "/KGlobalSettings",
+                        "org.kde.KGlobalSettings.notifyChange", "int32:5", "int32:0"])
         wallpaper = "file:///usr/share/wallpapers/Spicy" + suffix + "/contents/images/3840x2160.png"
         script = 'var all = desktops(); for (var i=0; i<all.length; ++i) { all[i].wallpaperPlugin="org.kde.image"; all[i].currentConfigGroup=["Wallpaper","org.kde.image","General"]; all[i].writeConfig("Image",' + json.dumps(wallpaper) + '); }'
         refresh.append(["dbus-send", "--session", "--print-reply", "--reply-timeout=3000", "--dest=org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell.evaluateScript", "string:" + script])

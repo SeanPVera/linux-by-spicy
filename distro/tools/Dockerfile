@@ -14,4 +14,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 RUN apt-get update && apt-get install -y --no-install-recommends libqt6svg6 qt6-svg-plugins dbus-bin qemu-system-gui \
+    python3-pyside6.qtwidgets libkf6config-bin \
     && rm -rf /var/lib/apt/lists/*

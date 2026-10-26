@@ -140,6 +140,70 @@ are observations of the framebuffer; they do not automatically mark a gate
 passed. A headless software boot supports smoke captures; use a visible GTK
 display for interactive testing.
 
+## Installed desktop follow-up
+
+The alpha2 packages include `spicy-desktop-test` for an existing Plasma Wayland
+desktop, including Debian ARM64 under Parallels. Its source-tree equivalent is
+`python3 distro/scripts/spicy-desktop-test`; keep `spicy-hardware-report` beside
+it if copying the source scripts. This test records installed-package evidence
+without inventing a booted Spicy ISO digest.
+
+Start from Konsole in the actual desktop session, as its normal user:
+
+```sh
+spicy-desktop-test --output "$HOME/Documents/spicy-inspect-01"
+```
+
+This collects observations without changing the theme or taking screenshots.
+The desktop package supplies the KWin/KScreen query dependencies. Optional
+captures and fresh-window comparisons also need Spectacle and Konsole, which
+the package recommends. If recommendations were disabled, install them with
+`sudo apt install spectacle konsole`.
+
+For the palette/cursor follow-up, leave an existing Konsole window open and run:
+
+```sh
+spicy-desktop-test --output "$HOME/Documents/spicy-refresh-alpha2-01" \
+  --cycle --capture --fresh-konsole
+```
+
+`--cycle` explicitly requests Daylight → Night Prowl → Daylight and leaves
+Daylight selected when all stages complete. `--capture` includes the pointer in
+full-desktop screenshots. `--fresh-konsole` additionally opens a separate,
+temporary Konsole after each switch, captures it and closes only that probe's
+process group. Compare the existing and new window's toolbar/tab-strip colors;
+the terminal text area may deliberately use its own dark profile.
+
+The test uses the current desktop environment without guessing display/socket
+names or borrowing another process's environment. It requires a responding
+Wayland KWin and active KScreen output before changing themes. A requested
+initial capture must also succeed. A failed/partial theme request, lost desktop
+access or failed capture stops the cycle; inspect `report.json` and the private
+stdout/stderr files for the exact outcome. If a local agent's sandbox denies
+desktop access, approve the specific test invocation as the normal desktop
+user using its usual approval controls. Running as root is rejected.
+
+Each helper/capture invocation records start, finish, elapsed time and status.
+Appearance snapshots record their own sampling interval and bounded KConfig
+probes. Evidence includes installed and selected helper hashes, collector/test
+hashes, package versions/architectures, before/after cursor selection, saved
+preferences, KWin/KScreen observations and journal extracts. An explicit
+`--appearance /path/to/executable/spicy-appearance` can select a candidate
+helper without replacing the installed one; its before/after hashes remain
+distinct from the installed-file observations.
+
+Outputs use a new private directory and never overwrite previous evidence.
+Raw screenshots, command outputs and journals can contain private desktop
+contents: review them before sharing. Command completion and a selected cursor
+theme do not establish correct pixels, hotspot clicks, smooth motion or sustained
+stability. Inspect the pointer and click with the leading triangle; review
+cursor-loading errors as well as KWin's selected theme. All visual checks remain
+unreviewed until a person or visual reviewer examines that evidence.
+
+This focused cycle does not exercise Welcome's buttons, reduced motion,
+lock/unlock, sign-out persistence, extended application use or the full scaling
+matrix. Those procedures and the amd64 live-image gate remain separate.
+
 ## Evidence and pass criteria
 
 Record the ISO digest, profile, actual guest resolution/scaling, session type,

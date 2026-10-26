@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
+"""Record an installed Plasma desktop follow-up; visual results require review."""
+
+import argparse
+from datetime import datetime, timezone
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import os
+from pathlib import Path
+import platform
+import shutil
+import signal
+import stat
+import subprocess
+import sys
+import threading
+import time
+
+
+def now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def save(path, value):
+    with path.open("x", encoding="utf-8") as stream:
+        os.chmod(path, 0o600)
+        stream.write(value)
+
+
+def fingerprint(path):
+    if path is None:
+        return {"status": "missing"}
+    path = Path(path)
+    try:
+        if not stat.S_ISREG(path.stat().st_mode):
+            return {"status": "not_regular_file", "name": path.name}
+        with path.open("rb") as stream:
+            data = stream.read(1024 * 1024 + 1)
+        if len(data) > 1024 * 1024:
+            return {"status": "too_large", "name": path.name}
+        return {"status": "ok", "name": path.name, "sha256": hashlib.sha256(data).hexdigest()}
+    except OSError:
+        return {"status": "unreadable", "name": path.name}
+
+
+def evidence_file(path):
+    with path.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    return {"name": path.name, "size_bytes": path.stat().st_size, "sha256": digest}
+
+
+def report_module():
+    path = Path(__file__).with_name("spicy-hardware-report")
+    loader = importlib.machinery.SourceFileLoader("spicy_desktop_report", str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def stop_owned_process(child):
+    if child.returncode is not None:
+        return
+    # Keep the leader unreaped until both signals were sent, so its process
+    # group ID cannot be reused while cleaning up descendants.
+    for sent in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(child.pid, sent)
+        except ProcessLookupError:
+            pass
+        if sent == signal.SIGTERM:
+            time.sleep(0.1)
+    child.wait(timeout=3)
+
+
+class _CommandInterrupted(BaseException):
+    """Avoid Popen.communicate's KeyboardInterrupt-specific child reaping."""
+
+
+def _interrupt_communicate(_signum, _frame):
+    raise _CommandInterrupted
+
+
+def communicate_owned(child, timeout):
+    previous = signal.signal(signal.SIGINT, _interrupt_communicate)
+    try:
+        return child.communicate(timeout=timeout)
+    finally:
+        signal.signal(signal.SIGINT, previous)
+
+
+class Run:
+    def __init__(self, output):
+        self.output = output
+        self.records = []
+
+    def command(self, label, argv, timeout=8):
+        if threading.current_thread() is not threading.main_thread():
+            raise RuntimeError("desktop command probes require the main thread for signal handling")
+        record = {"label": label, "argv": list(argv), "started_utc": now()}
+        began = time.monotonic()
+        stdout = stderr = ""
+        child = None
+        interrupted = False
+        try:
+            child = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                     text=True, errors="replace", start_new_session=True)
+            stdout, stderr = communicate_owned(child, timeout)
+            record.update(status="returned", returncode=child.returncode)
+        except subprocess.TimeoutExpired:
+            record.update(status="timeout", timeout_seconds=timeout)
+        except (KeyboardInterrupt, _CommandInterrupted):
+            record["status"] = "interrupted"
+            interrupted = True
+        except OSError as error:
+            record.update(status="execution_error", error_type=type(error).__name__)
+        finally:
+            if child is not None and record.get("status") != "returned":
+                stop_owned_process(child)
+                try:
+                    stdout, stderr = child.communicate(timeout=2)
+                except subprocess.TimeoutExpired as error:
+                    record["output_incomplete"] = True
+                    stdout, stderr = error.stdout or b"", error.stderr or b""
+                    stdout = stdout.decode(errors="replace") if isinstance(stdout, bytes) else stdout
+                    stderr = stderr.decode(errors="replace") if isinstance(stderr, bytes) else stderr
+                record["returncode_after_cleanup"] = child.returncode
+        record.update(finished_utc=now(), elapsed_seconds=round(time.monotonic() - began, 6))
+        save(self.output / (label + ".stdout.txt"), stdout)
+        save(self.output / (label + ".stderr.txt"), stderr)
+        self.records.append(record)
+        if interrupted:
+            raise KeyboardInterrupt
+        return record, stdout
+
+    def capture(self, label):
+        record, _ = self.command(label, ["spectacle", "--background", "--nonotify",
+                                        "--fullscreen", "--pointer", "--output",
+                                        str(self.output / (label + ".png"))], timeout=25)
+        path = self.output / (label + ".png")
+        if path.is_file():
+            path.chmod(0o600)
+        record["capture_present"] = path.is_file() and path.stat().st_size > 0
+        record["png_header_valid"] = False
+        if record["capture_present"]:
+            with path.open("rb") as stream:
+                record["png_header_valid"] = stream.read(8) == b"\x89PNG\r\n\x1a\n"
+        record["visual_status"] = "unreviewed"
+        return record.get("returncode") == 0 and record["png_header_valid"]
+
+    def snapshot(self, label, report, qdbus):
+        record, text = self.command(label + "-kwin", [qdbus, "org.kde.KWin", "/KWin",
+                                                    "org.kde.KWin.supportInformation"])
+        fields = report.selected_lines(text, report.KWIN_FIELDS)
+        save(self.output / (label + "-session.json"), json.dumps({
+            "kwin_fields": fields, "cursor": report.kwin_cursor(text),
+            "probe": record,
+        }, indent=2) + "\n")
+        display, raw = self.command(label + "-display", ["kscreen-doctor", "-j"])
+        try:
+            outputs = json.loads(raw)["outputs"]
+            active_output = any(isinstance(item, dict) and item.get("enabled") is True
+                                and item.get("connected") is True for item in outputs)
+        except (ValueError, KeyError, TypeError, AttributeError):
+            active_output = False
+        began = time.monotonic()
+        started = now()
+        appearance = report.appearance()
+        appearance.update(started_utc=started, finished_utc=now(),
+                          elapsed_seconds=round(time.monotonic() - began, 6))
+        save(self.output / (label + "-appearance.json"), json.dumps(appearance, indent=2) + "\n")
+        return (record.get("returncode") == 0 and fields.get("Operation Mode") == "Wayland"
+                and bool(os.environ.get("WAYLAND_DISPLAY"))
+                and display.get("returncode") == 0 and active_output)
+
+    def fresh_konsole(self, label):
+        """Inspect a new process, closing only the process group created here."""
+        record = {"label": label, "started_utc": now(), "visual_status": "unreviewed"}
+        child = None
+        captured = False
+        began = time.monotonic()
+        try:
+            with (self.output / (label + ".stdout.txt")).open("x") as stdout, \
+                    (self.output / (label + ".stderr.txt")).open("x") as stderr:
+                os.chmod(stdout.name, 0o600)
+                os.chmod(stderr.name, 0o600)
+                argv = ["konsole", "--separate", "--nofork", "-e", "sleep", "120"]
+                record["argv"] = argv
+                child = subprocess.Popen(argv, stdout=stdout, stderr=stderr, start_new_session=True)
+                time.sleep(2)
+                # Observe without reaping: cleanup still needs to reserve the
+                # leader PID while terminating any surviving process group.
+                record["running_before_capture"] = os.waitid(
+                    os.P_PID, child.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is None
+                if record["running_before_capture"]:
+                    captured = self.capture(label + "-capture")
+                record["status"] = "observed"
+        except OSError as error:
+            record.update(status="execution_error", error_type=type(error).__name__)
+        finally:
+            if child is not None:
+                # --separate and --nofork keep this probe out of existing Konsole instances.
+                stop_owned_process(child)
+                record["returncode_after_cleanup"] = child.returncode
+            record["fresh_capture_completed"] = captured
+            record.update(finished_utc=now(), elapsed_seconds=round(time.monotonic() - began, 6))
+            self.records.append(record)
+        return captured
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, required=True, help="new private evidence directory")
+    parser.add_argument("--cycle", action="store_true", help="apply Daylight, Night Prowl, then Daylight; leaves Daylight on success")
+    parser.add_argument("--capture", action="store_true", help="capture the full desktop and pointer; inspect private contents before sharing")
+    parser.add_argument("--fresh-konsole", action="store_true", help="compare each switched desktop with a temporary new Konsole process")
+    parser.add_argument("--appearance", type=Path, help="explicit executable candidate helper; default is installed spicy-appearance")
+    args = parser.parse_args(argv)
+    if os.getuid() == 0:
+        parser.error("run as the logged-in desktop user, without sudo")
+    if args.fresh_konsole and not (args.cycle and args.capture):
+        parser.error("--fresh-konsole requires --cycle and --capture")
+    if args.output.exists() or args.output.is_symlink():
+        parser.error("output already exists; choose a new directory to preserve evidence")
+    helper = str(args.appearance.resolve()) if args.appearance else shutil.which("spicy-appearance")
+    if args.cycle and (not helper or not os.access(helper, os.X_OK)):
+        parser.error("theme cycle requires an executable spicy-appearance helper")
+    report = report_module()
+    args.output.mkdir(parents=True, mode=0o700)
+    run = Run(args.output.resolve())
+    started = now()
+    selected_helper_before = fingerprint(helper)
+    outcome = "observation_only"
+    code = 0
+    error_type = None
+    try:
+        run.command("packages", ["dpkg-query", "-W", "-f=${Package}\t${Version}\t${Architecture}\n",
+                                 "spicy-artwork", "spicy-desktop", "kwin-wayland", "konsole", "qt6-style-kvantum"])
+        qdbus = next((name for name in ("qdbus6", "qdbus-qt6", "qdbus") if shutil.which(name)), "qdbus6")
+        ready = run.snapshot("00-before", report, qdbus)
+        run.command("logs-before", ["journalctl", "--user", "-b", "-u", "plasma-kwin_wayland.service",
+                                     "-n", "100", "--no-pager", "-o", "short-iso-precise"])
+        if not ready:
+            outcome, code = "blocked_desktop_access_or_non_wayland_session", 2
+        else:
+            captured = not args.capture or run.capture("00-before-capture")
+            if not captured:
+                outcome, code = "blocked_capture", 2
+            if args.cycle and captured:
+                outcome = "cycle_commands_completed_visual_review_required"
+                for label, theme in (("01-daylight", "daylight"), ("02-night-prowl", "night-prowl"), ("03-daylight", "daylight")):
+                    action, _ = run.command(label + "-apply", [helper, "--theme", theme], timeout=45)
+                    time.sleep(5)
+                    ready = run.snapshot(label, report, qdbus)
+                    captured = not args.capture or run.capture(label + "-capture")
+                    if action.get("returncode") != 0 or not ready:
+                        outcome, code = "cycle_incomplete", 1
+                        break
+                    if not captured:
+                        outcome, code = "capture_incomplete", 1
+                        break
+                    if args.fresh_konsole and not run.fresh_konsole(label + "-fresh-konsole"):
+                        outcome, code = "fresh_window_incomplete", 1
+                        break
+        run.command("logs-test", ["journalctl", "--user", "-b", "--since", started,
+                                   "--no-pager", "-o", "short-iso-precise"])
+    except KeyboardInterrupt:
+        outcome, code = "interrupted", 130
+    except Exception as error:
+        outcome, code = "execution_error", 1
+        error_type = type(error).__name__
+    finally:
+        selected_helper_after = fingerprint(helper)
+        if selected_helper_before != selected_helper_after:
+            outcome, code = "appearance_helper_changed_during_test", 1
+        data = {
+            "schema_version": 1, "scope": "installed_desktop_packages", "iso_identity": None,
+            "started_utc": started, "finished_utc": now(), "architecture": platform.machine(),
+            "outcome": outcome, "exit_code": code, "commands": run.records,
+            "error_type": error_type,
+            "test_script": fingerprint(Path(__file__)), "selected_appearance_helper": selected_helper_before,
+            "selected_appearance_helper_after": selected_helper_after,
+            "collector": fingerprint(Path(report.__file__)),
+            "review_status": "unreviewed", "visual_checks": "untested",
+            "limits": "Commands and still captures do not certify visible refresh, pointer hotspot, Welcome controls, lock/unlock or sustained stability. The cycle stops at the first failed theme request or lost KWin access.",
+            "privacy": "Raw command outputs, full screenshots and journals are private. Review before sharing; never commit the raw directory.",
+            "evidence_files": [
+                evidence_file(path)
+                for path in sorted(run.output.iterdir()) if path.is_file()
+            ],
+        }
+        save(run.output / "report.json", json.dumps(data, indent=2) + "\n")
+    print(f"{outcome}: saved {run.output / 'report.json'}; visual checks remain unreviewed.")
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

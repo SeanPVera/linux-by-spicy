@@ -3,6 +3,18 @@
 # Run only in a disposable container, never on the host.
 set -eu
 [ -f /.dockerenv ] || { echo 'Use a disposable container for the release-package check.' >&2; exit 1; }
+if [ "$#" -eq 0 ]; then
+    set -- /src/distro/dist/spicy-release_*_all.deb
+fi
+if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
+    echo 'Pass one release package explicitly when dist has zero or multiple versions.' >&2
+    exit 1
+fi
+release_package="$1"
+[ "$(dpkg-deb -f "$release_package" Package)" = spicy-release ] || {
+    echo 'The selected package must be spicy-release.' >&2
+    exit 1
+}
 original_link="$(readlink /etc/os-release)"
 original_content="$(cat /etc/os-release)"
 test_work="$(mktemp -d)"
@@ -12,7 +24,7 @@ trap 'rm -rf "$test_work"' EXIT
 # package must refuse it without changing ownership or the original identity;
 # the build owns removing its known diversion before installing packages.
 dpkg-divert --local --add --no-rename --divert /etc/os-release.debootstrap /etc/os-release
-if dpkg -i /src/distro/dist/spicy-release_0.1.0~alpha1_all.deb > "$test_work/rejected.log" 2>&1; then
+if dpkg -i "$release_package" > "$test_work/rejected.log" 2>&1; then
     echo 'Release identity must refuse an existing foreign diversion.' >&2
     exit 1
 fi
@@ -29,10 +41,10 @@ dpkg --purge spicy-release
 # Remove only this fixture; this is not a copy of the build's cleanup guard.
 dpkg-divert --local --remove --no-rename /etc/os-release
 
-dpkg -i /src/distro/dist/spicy-release_0.1.0~alpha1_all.deb
+dpkg -i "$release_package"
 [ "$(readlink /etc/os-release)" = /usr/lib/spicy/os-release ]
 grep -q '^ID=spicy$' /etc/os-release
-dpkg -i /src/distro/dist/spicy-release_0.1.0~alpha1_all.deb
+dpkg -i "$release_package"
 grep -q '^ID=spicy$' /etc/os-release
 dpkg --purge spicy-release
 [ "$(readlink /etc/os-release)" = "$original_link" ]

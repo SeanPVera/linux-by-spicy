@@ -66,6 +66,12 @@ Appearance commands have bounded waits so an unresponsive desktop cannot leave
 the welcome app busy indefinitely. The app reports when a live refresh remains
 incomplete; retry the same preference once the desktop is responding.
 
+For an installed desktop's palette/cursor follow-up, the alpha2 packages include
+`spicy-desktop-test`. The [VM guide](distro/VM_VALIDATION.md#installed-desktop-follow-up)
+describes its optional theme cycle, pointer-inclusive captures and comparison of
+existing/new Konsole windows. It records evidence for review; it does not mark
+visual checks passed automatically.
+
 ## Build the live image
 
 ```sh

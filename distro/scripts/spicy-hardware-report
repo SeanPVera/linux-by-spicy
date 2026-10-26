@@ -11,6 +11,7 @@ from pathlib import Path
 import platform
 import re
 import shutil
+import stat
 import subprocess
 import sys
 
@@ -39,6 +40,20 @@ GL_FIELDS = {
     "OpenGL core profile version string", "OpenGL version string",
 }
 RENDERER_OVERRIDE_FIELDS = ("KWIN_COMPOSE", "LIBGL_ALWAYS_SOFTWARE", "QT_QUICK_BACKEND")
+APPEARANCE_QUERIES = (
+    ("kvantum_theme", "Kvantum/kvantum.kvconfig", "General", "theme"),
+    ("widget_style", "kdeglobals", "KDE", "widgetStyle"),
+    ("color_scheme", "kdeglobals", "General", "ColorScheme"),
+    ("cursor_theme", "kcminputrc", "Mouse", "cursorTheme"),
+    ("cursor_size", "kcminputrc", "Mouse", "cursorSize"),
+    ("konsole_color_scheme", "konsolerc", "UiSettings", "ColorScheme"),
+    ("spicy_theme", "spicyrc", "Appearance", "Theme"),
+    ("reduced_motion", "spicyrc", "Appearance", "ReducedMotion"),
+)
+INSTALLED_APPEARANCE_FILES = {
+    "appearance_helper": Path("/usr/bin/spicy-appearance"),
+    "left_ptr_cursor": Path("/usr/share/icons/SpicyLittleTip/cursors/left_ptr"),
+}
 RESOLUTIONS = (
     (1024, 768), (1280, 720), (1280, 800), (1366, 768), (1920, 1080),
     (1920, 1200), (2560, 1440), (2560, 1600), (3440, 1440), (3840, 2160),
@@ -105,6 +120,103 @@ def selected_lines(output, allowed):
         if separator and key in allowed:
             fields[key] = value.strip()[:512]
     return fields
+
+
+def simple_appearance_value(value):
+    return bool(re.fullmatch(r"[A-Za-z0-9_. -]{1,128}", value))
+
+
+def kwin_cursor(output):
+    """Cursor names elsewhere in supportInformation must not impersonate this section."""
+    lines = (output or "").splitlines()
+    section = None
+    for index, line in enumerate(lines[:-1]):
+        if line.strip() == "Cursor" and re.fullmatch(r"=+", lines[index + 1].strip()):
+            section = index + 2
+            break
+    if section is None:
+        return {"status": "not_reported"}
+    values, omitted = {}, []
+    for index in range(section, len(lines)):
+        if (index + 1 < len(lines) and lines[index].strip()
+                and re.fullmatch(r"=+", lines[index + 1].strip())):
+            break
+        key, separator, value = lines[index].strip().partition(":")
+        if not separator or key not in ("themeName", "themeSize"):
+            continue
+        value = value.strip()
+        if key == "themeName" and simple_appearance_value(value):
+            values[key] = value
+        elif key == "themeSize" and re.fullmatch(r"[0-9]{1,3}", value) and int(value) <= 512:
+            values[key] = int(value)
+        else:
+            omitted.append(key)
+    return {"status": "ok" if len(values) == 2 and not omitted else "partial",
+            **values, "omitted_invalid_fields": omitted}
+
+
+def installed_file_hash(path, limit=8 * 1024 * 1024):
+    """Hash fixed package paths only, without following links or reading special files."""
+    try:
+        if not stat.S_ISREG(path.lstat().st_mode):
+            return {"status": "not_regular_file"}
+        descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NONBLOCK | os.O_NOFOLLOW)
+        with os.fdopen(descriptor, "rb") as stream:
+            before = os.fstat(stream.fileno())
+            if not stat.S_ISREG(before.st_mode):
+                return {"status": "not_regular_file"}
+            if before.st_size > limit:
+                return {"status": "too_large"}
+            digest, size = hashlib.sha256(), 0
+            while size <= limit:
+                block = stream.read(min(65536, limit + 1 - size))
+                if not block:
+                    break
+                digest.update(block)
+                size += len(block)
+            after = os.fstat(stream.fileno())
+            if size > limit:
+                return {"status": "too_large"}
+            if before.st_size != size or (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+                return {"status": "changed_during_read"}
+    except FileNotFoundError:
+        return {"status": "missing_file"}
+    except OSError:
+        return {"status": "unreadable"}
+    return {"status": "ok", "size_bytes": size, "sha256": digest.hexdigest()}
+
+
+def appearance():
+    settings = {}
+    for name, filename, group, key in APPEARANCE_QUERIES:
+        probe, output = command(["kreadconfig6", "--file", filename, "--group", group,
+                                 "--key", key], accepted=(0, 1))
+        if output is not None:
+            value = output.strip()
+            if not value:
+                probe["status"] = "not_configured"
+            elif probe.get("returncode", 0) != 0:
+                probe["status"] = "invalid_output"
+            elif name == "cursor_size":
+                if re.fullmatch(r"[0-9]{1,3}", value) and int(value) <= 512:
+                    probe["value"] = int(value)
+                else:
+                    probe["status"] = "invalid_output"
+            elif name == "reduced_motion":
+                if value.lower() in ("true", "false"):
+                    probe["value"] = value.lower() == "true"
+                else:
+                    probe["status"] = "invalid_output"
+            elif simple_appearance_value(value):
+                probe["value"] = value
+            else:
+                probe["status"] = "invalid_output"
+        settings[name] = probe
+    return {
+        "scope": "Allowlisted KConfig settings, not proof of live palettes or cursor identity. Installed file hashes identify those bytes, not a source commit, package archive or booted ISO.",
+        "settings": settings,
+        "installed_files": {name: installed_file_hash(path) for name, path in INSTALLED_APPEARANCE_FILES.items()},
+    }
 
 
 def read_efi_variable(name):
@@ -258,6 +370,9 @@ def graphics():
         kwin["fields"] = selected_lines(output, KWIN_FIELDS)
         if not kwin["fields"]:
             kwin["status"] = "no_recognized_fields"
+        kwin["cursor"] = kwin_cursor(output)
+    else:
+        kwin["cursor"] = {"status": kwin["status"]}
     gl, output = command(["glxinfo", "-B"])
     if output is not None:
         gl["fields"] = selected_lines(output, GL_FIELDS)
@@ -339,7 +454,7 @@ def collect():
     return {
         "platform": {"kernel": platform.release(), "architecture": platform.machine(), "os_release": os_release, "dmi": dmi, "cpu": cpu, "logical_cpus": os.cpu_count(), "virtualization": virtual},
         "session": {"type": os.environ.get("XDG_SESSION_TYPE") if os.environ.get("XDG_SESSION_TYPE") in ("wayland", "x11", "tty") else "unknown", "plasma_version": os.environ.get("KDE_SESSION_VERSION") if os.environ.get("KDE_SESSION_VERSION", "").isdigit() else None, "wayland_display_present": bool(os.environ.get("WAYLAND_DISPLAY")), "x_display_present": bool(os.environ.get("DISPLAY"))},
-        "pci_controllers": pci_devices(), "graphics": graphics(),
+        "pci_controllers": pci_devices(), "graphics": graphics(), "appearance": appearance(),
         "secure_boot": secure_boot(), "packages": packages(), "peripherals": peripherals(),
     }
 

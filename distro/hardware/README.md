@@ -68,11 +68,24 @@ Each invocation creates two JSON files and refuses to overwrite prior runs:
 
 - `observations.json`: session type, KWin and GLX renderer fields, display modes
   and scales, firmware/Secure Boot variables, package versions, device/service
-  presence and declared VM setup. Missing commands, timeouts, unreadable firmware
-  variables and failed probes remain explicit.
+  presence and declared VM setup. Appearance observations include allowlisted
+  saved theme/style/cursor settings, Konsole's per-application color scheme,
+  reduced-motion preference, and bounded hashes of the installed appearance
+  helper and compiled pointer. KWin's `Cursor` section is retained separately
+  from saved settings. Missing commands, timeouts, invalid/private values,
+  unreadable firmware variables and failed probes remain explicit.
 - `results.json`: 18 functional checks plus 80 resolution/scale/theme cases.
   Every case starts `untested`; detected devices and installed signed packages
   never become automatic passes.
+
+Saved appearance values do not prove what a running application rendered.
+KWin's cursor section identifies its selected server/fallback theme; individual
+Wayland clients can supply their own cursors, and failed artwork loading can
+still cause a fallback. Check a pointer-inclusive capture, cursor-load journal
+errors and actual leading-tip clicks. Installed file hashes identify those
+bytes, not a source commit, original package archive or booted image. The
+[installed desktop follow-up](../VM_VALIDATION.md#installed-desktop-follow-up)
+collects a bounded theme cycle for installations that have no Spicy ISO identity.
 
 Fill each result's `status`, `observed_at_utc`, `notes` and `evidence` with the
 observed behavior, actual application versions and relative attachment filenames.

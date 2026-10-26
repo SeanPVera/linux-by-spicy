@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -42,6 +43,8 @@ class HardwareReportTests(unittest.TestCase):
             self.assertFalse(observations["image"]["boot_origin_confirmed"])
             self.assertEqual(observations["diagnostics"]["graphics"]["kwin"]["status"], "missing_command")
             self.assertEqual(observations["diagnostics"]["graphics"]["kwin_process_environment"]["status"], "missing_command")
+            self.assertEqual(observations["diagnostics"]["graphics"]["kwin"]["cursor"]["status"], "missing_command")
+            self.assertEqual(observations["diagnostics"]["appearance"]["settings"]["kvantum_theme"]["status"], "missing_command")
             self.assertEqual(observations["diagnostics"]["peripherals"]["network_manager"]["status"], "missing_command")
             self.assertEqual(len(matrix["scaling"]), 80)
             self.assertIn([3840, 2160], [case["resolution"] for case in matrix["scaling"]])
@@ -101,6 +104,102 @@ class HardwareReportTests(unittest.TestCase):
         fields = REPORT.selected_lines(source, REPORT.KWIN_FIELDS)
         self.assertEqual(fields["OpenGL renderer string"], "llvmpipe")
         self.assertNotIn("private", json.dumps(fields))
+
+    def test_appearance_queries_keep_only_typed_allowlisted_values(self):
+        values = ("SpicyDaylight\n", "kvantum\n", "SpicyDaylight\n", "SpicyLittleTip\n", "24\n", "\n", "night-prowl\n", "true\n")
+        replies = [({"status": "ok", "command": "kreadconfig6", "returncode": 0}, value) for value in values]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "private-source-path"
+            path.write_bytes(b"installed helper bytes")
+            with patch.object(REPORT, "command", side_effect=replies) as probe, \
+                    patch.object(REPORT, "INSTALLED_APPEARANCE_FILES", {"appearance_helper": path}):
+                data = REPORT.appearance()
+        settings = data["settings"]
+        self.assertEqual(settings["kvantum_theme"]["value"], "SpicyDaylight")
+        self.assertEqual(settings["widget_style"]["value"], "kvantum")
+        self.assertEqual(settings["cursor_theme"]["value"], "SpicyLittleTip")
+        self.assertEqual(settings["cursor_size"]["value"], 24)
+        self.assertEqual(settings["konsole_color_scheme"]["status"], "not_configured")
+        self.assertEqual(settings["spicy_theme"]["value"], "night-prowl")
+        self.assertIs(settings["reduced_motion"]["value"], True)
+        self.assertEqual(data["installed_files"]["appearance_helper"]["sha256"], hashlib.sha256(b"installed helper bytes").hexdigest())
+        self.assertEqual(len(probe.call_args_list), 8)
+        for call, (_, filename, group, key) in zip(probe.call_args_list, REPORT.APPEARANCE_QUERIES):
+            self.assertEqual(call.args[0], ["kreadconfig6", "--file", filename, "--group", group, "--key", key])
+            self.assertEqual(call.kwargs["accepted"], (0, 1))
+        self.assertNotIn("private", json.dumps(data))
+
+    def test_appearance_failed_probes_and_invalid_values_cannot_leak_config(self):
+        replies = [
+            ({"status": "missing_command"}, None),
+            ({"status": "timeout", "timeout_seconds": 8}, None),
+            ({"status": "failed", "returncode": 2}, None),
+            ({"status": "partial", "returncode": 1}, ""),
+            ({"status": "ok", "returncode": 0}, "999"),
+            ({"status": "ok", "returncode": 0}, "/home/private-user/scheme"),
+            ({"status": "partial", "returncode": 1}, ""),
+            ({"status": "ok", "returncode": 0}, "private-user"),
+        ]
+        with patch.object(REPORT, "command", side_effect=replies), \
+                patch.object(REPORT, "INSTALLED_APPEARANCE_FILES", {}):
+            data = REPORT.appearance()
+        self.assertEqual([probe["status"] for probe in data["settings"].values()],
+                         ["missing_command", "timeout", "failed", "not_configured", "invalid_output", "invalid_output", "not_configured", "invalid_output"])
+        self.assertNotIn("private", json.dumps(data))
+        for value in ("private-user\nOtherKey=secret", "x" * 129, "invalid/secret", "nonascii-\u2603"):
+            with self.subTest(value=value), \
+                    patch.object(REPORT, "command", return_value=({"status": "ok", "returncode": 0}, value)), \
+                    patch.object(REPORT, "INSTALLED_APPEARANCE_FILES", {}):
+                data = REPORT.appearance()
+            self.assertEqual({p["status"] for p in data["settings"].values()}, {"invalid_output"})
+            self.assertFalse(any("value" in p for p in data["settings"].values()))
+        with patch.object(REPORT, "command", return_value=({"status": "partial", "returncode": 1}, "private-user")), \
+                patch.object(REPORT, "INSTALLED_APPEARANCE_FILES", {}):
+            data = REPORT.appearance()
+        self.assertEqual({p["status"] for p in data["settings"].values()}, {"invalid_output"})
+        self.assertNotIn("private", json.dumps(data))
+
+    def test_cursor_section_must_be_present_and_not_spoofed_by_other_sections(self):
+        source = "Effects\n=======\nthemeName: private-name\nthemeSize: 999\n\nCursor\n======\nthemeName: SpicyLittleTip\nthemeSize: 24\n\nOther\n=====\nthemeName: private-name\nthemeSize: 999\n"
+        data = REPORT.kwin_cursor(source)
+        self.assertEqual(data, {"status": "ok", "themeName": "SpicyLittleTip", "themeSize": 24, "omitted_invalid_fields": []})
+        self.assertEqual(REPORT.kwin_cursor("Effects\n=======\nthemeName: SpicyLittleTip\n"), {"status": "not_reported"})
+        data = REPORT.kwin_cursor("Cursor\n======\nthemeName: /home/private-user\nthemeSize: 999\n")
+        self.assertEqual(data["status"], "partial")
+        self.assertEqual(data["omitted_invalid_fields"], ["themeName", "themeSize"])
+        self.assertNotIn("private", json.dumps(data))
+        self.assertEqual(REPORT.kwin_cursor("Cursor\n======\nthemeName: breeze_cursors\n")["status"], "partial")
+
+    def test_installed_hashes_preserve_bytes_and_refuse_links_or_special_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            regular = root / "helper"
+            regular.write_bytes(b"installed bytes")
+            data = REPORT.installed_file_hash(regular)
+            self.assertEqual(data, {"status": "ok", "size_bytes": 15, "sha256": hashlib.sha256(b"installed bytes").hexdigest()})
+            link = root / "link"
+            link.symlink_to(regular)
+            fifo = root / "fifo"
+            os.mkfifo(fifo)
+            for path in (link, fifo, root):
+                with self.subTest(path=path), patch.object(REPORT.os, "open") as opened:
+                    self.assertEqual(REPORT.installed_file_hash(path), {"status": "not_regular_file"})
+                    opened.assert_not_called()
+
+    def test_installed_hash_limits_access_and_changes_stay_explicit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "private-path"
+            self.assertEqual(REPORT.installed_file_hash(path), {"status": "missing_file"})
+            path.write_bytes(b"oversized")
+            self.assertEqual(REPORT.installed_file_hash(path, limit=2), {"status": "too_large"})
+            with patch.object(REPORT.os, "open", side_effect=PermissionError("private-error")):
+                data = REPORT.installed_file_hash(path)
+            self.assertEqual(data, {"status": "unreadable"})
+            self.assertNotIn("private", json.dumps(data))
+            before = path.stat()
+            after = SimpleNamespace(st_size=before.st_size, st_mtime_ns=before.st_mtime_ns + 1)
+            with patch.object(REPORT.os, "fstat", side_effect=[before, after]):
+                self.assertEqual(REPORT.installed_file_hash(path), {"status": "changed_during_read"})
 
     def test_collector_overrides_are_distinct_from_kwin_process_environment(self):
         with tempfile.TemporaryDirectory() as directory:

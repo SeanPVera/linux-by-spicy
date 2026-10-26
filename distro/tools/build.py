@@ -15,7 +15,7 @@ import cairosvg
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.1.0~alpha1"
+VERSION = "0.1.0~alpha2"
 PALETTE = json.loads((ROOT / "artwork/direction.json").read_text())["palette"]
 SIZES = (24, 28, 32, 36, 40, 48, 64, 72, 96, 128)
 WALLPAPER_SIZES = ((1280, 720), (1366, 768), (1280, 800), (1920, 1080),
@@ -268,9 +268,10 @@ def build_desktop(dest, scratch):
     write(dest / "usr/share/doc/spicy-desktop/art-direction.json", (ROOT / "artwork/direction.json").read_text())
 
 
-def package(root, name, depends, summary, output):
+def package(root, name, depends, summary, output, recommends=""):
     dependency = f"Depends: {depends}\n" if depends else ""
-    write(root / "DEBIAN/control", f"Package: {name}\nVersion: {VERSION}\nSection: x11\nPriority: optional\nArchitecture: all\nMaintainer: Spicy Linux <noreply@github.com>\n{dependency}Homepage: https://github.com/SeanPVera/linux-by-spicy\nDescription: {summary}\n A first Spicy Linux desktop alpha for Debian 13 and Plasma 6.\n")
+    recommendation = f"Recommends: {recommends}\n" if recommends else ""
+    write(root / "DEBIAN/control", f"Package: {name}\nVersion: {VERSION}\nSection: x11\nPriority: optional\nArchitecture: all\nMaintainer: Spicy Linux <noreply@github.com>\n{dependency}{recommendation}Homepage: https://github.com/SeanPVera/linux-by-spicy\nDescription: {summary}\n A first Spicy Linux desktop alpha for Debian 13 and Plasma 6.\n")
     copyright = "Spicy Linux distribution assets and code\nLicense: GPL-2.0-only\nSee /usr/share/common-licenses/GPL-2.\n\nKvantum-derived theme geometry: Tsu Jan, GPL-3.0-or-later.\nSee /usr/share/common-licenses/GPL-3 and each theme's UPSTREAM file.\n"
     write(root / f"usr/share/doc/{name}/copyright",copyright)
     # Source artwork can originate in private upload directories. Installed
@@ -305,8 +306,8 @@ def main():
             target.parent.mkdir(parents=True,exist_ok=True)
             shutil.copy2(file,target)
     package(art,"spicy-artwork","", "Spicy the Cat artwork and wallpapers",args.output)
-    deps = f"spicy-artwork (= {VERSION}), fonts-atkinson-hyperlegible, fonts-noto-core, breeze-icon-theme, breeze-cursor-theme, plasma-workspace (>= 4:6.0), kde-cli-tools, dbus-bin, qt6-style-kvantum, libqt6svg6, qt6-svg-plugins, python3, python3-pyside6.qtquick, python3-pyside6.qtqml, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qt5compat-graphicaleffects, plymouth, sddm"
-    package(desktop,"spicy-desktop",deps,"Spicy Daylight and Night Prowl Plasma desktop",args.output)
+    deps = f"spicy-artwork (= {VERSION}), fonts-atkinson-hyperlegible, fonts-noto-core, breeze-icon-theme, breeze-cursor-theme, plasma-workspace (>= 4:6.0), kde-cli-tools, dbus-bin, qt6-style-kvantum, libqt6svg6, qt6-svg-plugins, libkscreen-bin, qdbus-qt6, python3, python3-pyside6.qtquick, python3-pyside6.qtqml, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qt5compat-graphicaleffects, plymouth, sddm"
+    package(desktop,"spicy-desktop",deps,"Spicy Daylight and Night Prowl Plasma desktop",args.output,recommends="konsole, spectacle")
     package(release,"spicy-release","base-files, dpkg", "Spicy Linux alpha system identity",args.output)
 
 

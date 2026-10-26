@@ -51,6 +51,17 @@ jobs:
         run: |
           docker run --rm --mount "type=bind,src=$PWD,dst=/src" \
             spicy-builder:alpha sh distro/tools/check-release
+      - name: Bundle the Debian ARM64 desktop setup
+        run: python3 distro/tools/build-arm64-setup.py --source-commit "$GITHUB_SHA"
+      - name: Resolve Debian ARM64 dependencies without installing
+        run: |
+          docker run --rm --mount "type=bind,src=$PWD,dst=/src" \
+            spicy-builder:alpha sh distro/tools/check-arm64-dependencies
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spicy-debian-arm64-setup
+          path: distro/dist/spicy-debian-arm64-setup/
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:

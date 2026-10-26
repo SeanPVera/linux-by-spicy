@@ -3,7 +3,7 @@
 set -eu
 python3 -m pytest -q distro/tests
 desktop-file-validate distro/theme/files/usr/share/applications/spicy-welcome.desktop
-shellcheck distro/scripts/build-packages distro/scripts/build-live distro/scripts/spicy-first-login distro/live/auto/config distro/live/config/hooks/live/0200-spicy.hook.chroot distro/release/DEBIAN/postinst distro/release/DEBIAN/postrm distro/tools/stage-live-config distro/tools/validate-live-config distro/tools/check-release
+shellcheck distro/scripts/build-packages distro/scripts/build-live distro/scripts/spicy-first-login distro/live/auto/config distro/live/config/hooks/live/0200-spicy.hook.chroot distro/release/DEBIAN/postinst distro/release/DEBIAN/postrm distro/tools/stage-live-config distro/tools/validate-live-config distro/tools/check-release distro/tools/check-arm64-dependencies
 QT_QPA_PLATFORM=offscreen python3 distro/tools/check-appearance-refresh.py
 for scale in 1 1.25 1.5 2; do
     QT_QPA_PLATFORM=offscreen python3 distro/tools/check_scaling.py --scale "$scale"

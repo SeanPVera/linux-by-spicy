@@ -3,7 +3,7 @@
 A Debian 13 / KDE Plasma desktop inspired by Spicy the Cat: his real portrait,
 ginger tabby markings, white socks, pink toe beans and red heart tag.
 
-Distribution development lives under `distro/` on the `spicy-distro` branch.
+Distribution development lives under `distro/` on the `master` branch.
 The existing Linux kernel source tree is retained; the live image uses Debian's
 supported packaged kernel.
 
@@ -51,6 +51,15 @@ spicy-welcome
 It is not needed to try the desktop theme on an existing Debian installation.
 Its maintained diversion preserves Debian's original `/etc/os-release` and
 restores it when the package is removed.
+
+### Apple M4 / Parallels ARM64
+
+Use Debian 13 **ARM64** with KDE Plasma and the audited
+`spicy-debian-arm64-setup` artifact from GitHub Actions. Its two Spicy packages
+are architecture-independent; Debian supplies the native ARM64 dependencies.
+The [Parallels setup guide](distro/parallels/README.md) covers the official Debian
+installer, an existing VM, installation, rebuilding, updates, rollback and
+testing. The amd64 live ISO is a separate image.
 
 You can also switch explicitly from a running Plasma session:
 

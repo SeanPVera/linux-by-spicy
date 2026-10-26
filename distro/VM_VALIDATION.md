@@ -204,6 +204,27 @@ This focused cycle does not exercise Welcome's buttons, reduced motion,
 lock/unlock, sign-out persistence, extended application use or the full scaling
 matrix. Those procedures and the amd64 live-image gate remain separate.
 
+### Independent state checks after a capture failure
+
+Capture is optional for the state-only mode. Preserve the failed capture run
+and use a new output directory to test settings independently:
+
+```sh
+spicy-desktop-test --output "$HOME/Documents/spicy-state-alpha2-01" --cycle
+```
+
+This does not retry Spectacle or request fresh-window captures. It still checks
+KWin and an active output before changing themes, stops after a failed/partial
+theme request or lost desktop access, and leaves all visual checks untested.
+Review the failed capture report and the independent state report together;
+successful settings commands do not turn the earlier capture failure into a
+pass. The regression suite verifies that the earlier evidence is unchanged.
+
+For managed QEMU runs, `run-vm capture` can retain ordinary framebuffer images
+while these settings requests run. Label them as ordinary host screenshots.
+They provide no pointer-artwork or leading-tip hotspot proof. Compare visible
+application colors only when a reviewer actually examines the relevant frames.
+
 ## Evidence and pass criteria
 
 Record the ISO digest, profile, actual guest resolution/scaling, session type,

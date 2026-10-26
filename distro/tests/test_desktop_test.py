@@ -210,6 +210,31 @@ def test_failed_capture_blocks_the_cycle_before_any_theme_write(tmp_path, monkey
     assert json.loads((output / "report.json").read_text())["outcome"] == "blocked_capture"
 
 
+def test_capture_failure_preserves_evidence_and_allows_an_independent_state_only_cycle(tmp_path, monkeypatch, desktop):
+    helper, themes = desktop
+    captures = []
+
+    def unavailable_capture(_run, label):
+        captures.append(label)
+        return False
+
+    monkeypatch.setattr(TEST.Run, "capture", unavailable_capture)
+    visual = tmp_path / "visual-evidence"
+    assert TEST.main(["--output", str(visual), "--cycle", "--capture", "--appearance", str(helper)]) == 2
+    before = (visual / "report.json").read_bytes()
+    assert not themes.exists()
+
+    state = tmp_path / "state-evidence"
+    assert TEST.main(["--output", str(state), "--cycle", "--appearance", str(helper)]) == 0
+    assert themes.read_text().splitlines() == ["daylight", "night-prowl", "daylight"]
+    assert captures == ["00-before-capture"]
+    assert (visual / "report.json").read_bytes() == before
+    assert json.loads(before)["outcome"] == "blocked_capture"
+    report = json.loads((state / "report.json").read_text())
+    assert report["outcome"] == "cycle_commands_completed_visual_review_required"
+    assert report["visual_checks"] == "untested" and report["review_status"] == "unreviewed"
+
+
 def test_failed_apply_skips_fresh_window_probe(tmp_path, monkeypatch, desktop):
     helper, _themes = desktop
     monkeypatch.setenv("SPICY_TEST_APPLY_EXIT", "2")

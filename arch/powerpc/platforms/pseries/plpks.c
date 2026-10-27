@@ -1154,12 +1154,12 @@ int plpks_unwrap_object(u8 **input_buf, u32 input_len, u8 **output_buf,
 	*output_buf = NULL;
 	*output_len = 0;
 
+	if (input_len <= PLPKS_WRAPPING_BUF_DIFF)
+		return -EINVAL;
+
 	auth = construct_auth(PLPKS_OS_OWNER);
 	if (IS_ERR(auth))
 		return PTR_ERR(auth);
-
-	if (input_len <= PLPKS_WRAPPING_BUF_DIFF)
-		return -EINVAL;
 
 	*output_len = input_len - PLPKS_WRAPPING_BUF_DIFF;
 	*output_buf = kzalloc(ALIGN(*output_len, PLPKS_WRAPPING_BUF_ALIGN),

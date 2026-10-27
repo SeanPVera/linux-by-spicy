@@ -208,7 +208,8 @@ static int io_register_restrictions_task(void __user *arg, unsigned int nr_args)
 
 	/* Disallow if task already has registered restrictions */
 	if (current->io_uring_restrict &&
-	    current->io_uring_restrict->reg_registered)
+	    (current->io_uring_restrict->op_registered ||
+	     current->io_uring_restrict->reg_registered))
 		return -EPERM;
 	/*
 	 * Similar to seccomp, disallow setting a filter if task_no_new_privs
@@ -238,12 +239,16 @@ static int io_register_restrictions_task(void __user *arg, unsigned int nr_args)
 
 	ret = io_parse_restrictions(ures->restrictions, tres.nr_res, res);
 	if (ret < 0) {
-		if (allocated)
+		if (allocated) {
 			kfree(res);
-		else
-			memset(&res->register_op, 0,
-			       offsetof(struct io_restriction, bpf_filters_cow) -
-			       offsetof(struct io_restriction, register_op));
+		} else {
+			struct io_bpf_filters *bpf = res->bpf_filters;
+			bool cowed = res->bpf_filters_cow;
+
+			memset(res, 0, sizeof(*res));
+			res->bpf_filters = bpf;
+			res->bpf_filters_cow = cowed;
+		}
 		return ret;
 	}
 	current->io_uring_restrict = res;

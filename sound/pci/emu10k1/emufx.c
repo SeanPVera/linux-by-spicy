@@ -2364,13 +2364,25 @@ int snd_emu10k1_init_efx(struct snd_emu10k1 *emu)
 		return _snd_emu10k1_init_efx(emu);
 }
 
+static int __snd_emu10k1_fx8010_tram_setup(struct snd_emu10k1 *emu, u32 size);
+
 void snd_emu10k1_free_efx(struct snd_emu10k1 *emu)
 {
+	int i;
+
 	/* stop processor */
 	if (emu->audigy)
 		snd_emu10k1_ptr_write(emu, A_DBG, 0, emu->fx8010.dbg = A_DBG_SINGLE_STEP);
 	else
 		snd_emu10k1_ptr_write(emu, DBG, 0, emu->fx8010.dbg = EMU10K1_DBG_SINGLE_STEP);
+
+	scoped_guard(spinlock_irq, &emu->reg_lock) {
+		for (i = 0; i < 8; i++) {
+			emu->fx8010.pcm[i].valid = 0;
+			emu->fx8010.pcm[i].opened = 0;
+		}
+	}
+	__snd_emu10k1_fx8010_tram_setup(emu, 0);
 }
 
 #if 0 /* FIXME: who use them? */
@@ -2391,20 +2403,12 @@ int snd_emu10k1_fx8010_tone_control_deactivate(struct snd_emu10k1 *emu, int outp
 }
 #endif
 
-int snd_emu10k1_fx8010_tram_setup(struct snd_emu10k1 *emu, u32 size)
+static int __snd_emu10k1_fx8010_tram_setup(struct snd_emu10k1 *emu, u32 size)
 {
 	u8 size_reg = 0;
-	int i;
 
 	if (size > 0x100000)
 		return -EINVAL;
-
-	scoped_guard(spinlock_irq, &emu->reg_lock) {
-		for (i = 0; i < 8; i++) {
-			if (emu->fx8010.pcm[i].opened || emu->fx8010.pcm[i].valid)
-				return -EBUSY;
-		}
-	}
 
 	/* size is in samples */
 	if (size != 0) {
@@ -2442,6 +2446,23 @@ int snd_emu10k1_fx8010_tram_setup(struct snd_emu10k1 *emu, u32 size)
 	}
 
 	return 0;
+}
+
+int snd_emu10k1_fx8010_tram_setup(struct snd_emu10k1 *emu, u32 size)
+{
+	int i;
+
+	if (size > 0x100000)
+		return -EINVAL;
+
+	scoped_guard(spinlock_irq, &emu->reg_lock) {
+		for (i = 0; i < 8; i++) {
+			if (emu->fx8010.pcm[i].opened || emu->fx8010.pcm[i].valid)
+				return -EBUSY;
+		}
+	}
+
+	return __snd_emu10k1_fx8010_tram_setup(emu, size);
 }
 
 static int snd_emu10k1_fx8010_open(struct snd_hwdep * hw, struct file *file)

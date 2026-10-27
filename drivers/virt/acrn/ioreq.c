@@ -485,10 +485,12 @@ void acrn_ioreq_client_destroy(struct acrn_ioreq_client *client)
 		kthread_stop(client->thread);
 
 	spin_lock_bh(&vm->ioreq_clients_lock);
-	if (client->is_default)
-		vm->default_client = NULL;
-	else
+	if (client->is_default) {
+		if (vm->default_client == client)
+			vm->default_client = NULL;
+	} else {
 		list_del(&client->list);
+	}
 	spin_unlock_bh(&vm->ioreq_clients_lock);
 
 	write_lock_bh(&client->range_lock);

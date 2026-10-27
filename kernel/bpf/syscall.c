@@ -6266,6 +6266,8 @@ static int prog_stream_read(union bpf_attr *attr)
 
 	if (CHECK_ATTR(BPF_PROG_STREAM_READ_BY_FD))
 		return -EINVAL;
+	if (len > INT_MAX)
+		return -EINVAL;
 
 	prog = bpf_prog_get(attr->prog_stream_read.prog_fd);
 	if (IS_ERR(prog))

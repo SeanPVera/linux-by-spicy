@@ -786,6 +786,11 @@ static int snd_emu10k1_verify_controls(struct snd_emu10k1 *emu,
 			err = -EFAULT;
 			goto __error;
 		}
+		if (gctl->vcount == 0 || gctl->vcount > 32 ||
+		    gctl->count == 0 || gctl->count > 32) {
+			err = -EINVAL;
+			goto __error;
+		}
 		if (snd_emu10k1_look_for_ctl(emu, &gctl->id))
 			continue;
 		gctl_id = (struct snd_ctl_elem_id *)&gctl->id;
@@ -878,6 +883,11 @@ static int snd_emu10k1_add_controls(struct snd_emu10k1 *emu,
 			err = -EFAULT;
 			goto __error;
 		}
+		if (gctl->vcount == 0 || gctl->vcount > 32 ||
+		    gctl->count == 0 || gctl->count > 32) {
+			err = -EINVAL;
+			goto __error;
+		}
 		gctl_id = (struct snd_ctl_elem_id *)&gctl->id;
 		if (gctl_id->iface != SNDRV_CTL_ELEM_IFACE_MIXER &&
 		    gctl_id->iface != SNDRV_CTL_ELEM_IFACE_PCM) {
@@ -934,6 +944,7 @@ static int snd_emu10k1_add_controls(struct snd_emu10k1 *emu,
 			list_add_tail(&ctl->list, &emu->fx8010.gpr_ctl);
 		} else {
 			/* overwrite */
+			kfree(knew.tlv.p);
 			nctl->list = ctl->list;
 			nctl->kcontrol = ctl->kcontrol;
 			*ctl = *nctl;
@@ -1098,6 +1109,10 @@ static int snd_emu10k1_ipcm_poke(struct snd_emu10k1 *emu,
 	} else {
 		/* FIXME: we need to add universal code to the PCM transfer routine */
 		if (ipcm->channels != 2)
+			return -EINVAL;
+		if (ipcm->buffer_size < (14 + 1) * 2 ||
+		    !emu->fx8010.etram_pages.area ||
+		    ipcm->buffer_size > emu->fx8010.etram_pages.bytes / 2)
 			return -EINVAL;
 		pcm->valid = 1;
 		pcm->opened = 0;
@@ -2349,13 +2364,25 @@ int snd_emu10k1_init_efx(struct snd_emu10k1 *emu)
 		return _snd_emu10k1_init_efx(emu);
 }
 
+static int __snd_emu10k1_fx8010_tram_setup(struct snd_emu10k1 *emu, u32 size);
+
 void snd_emu10k1_free_efx(struct snd_emu10k1 *emu)
 {
+	int i;
+
 	/* stop processor */
 	if (emu->audigy)
 		snd_emu10k1_ptr_write(emu, A_DBG, 0, emu->fx8010.dbg = A_DBG_SINGLE_STEP);
 	else
 		snd_emu10k1_ptr_write(emu, DBG, 0, emu->fx8010.dbg = EMU10K1_DBG_SINGLE_STEP);
+
+	scoped_guard(spinlock_irq, &emu->reg_lock) {
+		for (i = 0; i < 8; i++) {
+			emu->fx8010.pcm[i].valid = 0;
+			emu->fx8010.pcm[i].opened = 0;
+		}
+	}
+	__snd_emu10k1_fx8010_tram_setup(emu, 0);
 }
 
 #if 0 /* FIXME: who use them? */
@@ -2376,9 +2403,12 @@ int snd_emu10k1_fx8010_tone_control_deactivate(struct snd_emu10k1 *emu, int outp
 }
 #endif
 
-int snd_emu10k1_fx8010_tram_setup(struct snd_emu10k1 *emu, u32 size)
+static int __snd_emu10k1_fx8010_tram_setup(struct snd_emu10k1 *emu, u32 size)
 {
 	u8 size_reg = 0;
+
+	if (size > 0x100000)
+		return -EINVAL;
 
 	/* size is in samples */
 	if (size != 0) {
@@ -2416,6 +2446,23 @@ int snd_emu10k1_fx8010_tram_setup(struct snd_emu10k1 *emu, u32 size)
 	}
 
 	return 0;
+}
+
+int snd_emu10k1_fx8010_tram_setup(struct snd_emu10k1 *emu, u32 size)
+{
+	int i;
+
+	if (size > 0x100000)
+		return -EINVAL;
+
+	scoped_guard(spinlock_irq, &emu->reg_lock) {
+		for (i = 0; i < 8; i++) {
+			if (emu->fx8010.pcm[i].opened || emu->fx8010.pcm[i].valid)
+				return -EBUSY;
+		}
+	}
+
+	return __snd_emu10k1_fx8010_tram_setup(emu, size);
 }
 
 static int snd_emu10k1_fx8010_open(struct snd_hwdep * hw, struct file *file)
@@ -2502,6 +2549,8 @@ static int snd_emu10k1_fx8010_ioctl(struct snd_hwdep * hw, struct file *file, un
 		kfree(icode);
 		return res;
 	case SNDRV_EMU10K1_IOCTL_PCM_POKE:
+		if (!capable(CAP_SYS_ADMIN))
+			return -EPERM;
 		ipcm = memdup_user(argp, sizeof(*ipcm));
 		if (IS_ERR(ipcm))
 			return PTR_ERR(ipcm);

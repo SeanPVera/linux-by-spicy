@@ -345,6 +345,11 @@ static noinline int ntfs_set_ea(struct inode *inode, const char *name,
 		goto out;
 	}
 
+	if (val_size > 0xffff) {
+		err = -EFBIG;
+		goto out;
+	}
+
 	add = ALIGN(struct_size(ea_all, name, 1 + name_len + val_size), 4);
 
 	err = ntfs_read_ea(ni, &ea_all, add, &info);
@@ -1043,9 +1048,13 @@ void ntfs_get_wsl_perm(struct inode *inode)
 			sizeof(value[1]), &sz) == sizeof(value[1]) &&
 	    ntfs_get_ea(inode, "$LXMOD", sizeof("$LXMOD") - 1, &value[2],
 			sizeof(value[2]), &sz) == sizeof(value[2])) {
+		umode_t mode = le32_to_cpu(value[2]);
+
+		if (S_ISDIR(inode->i_mode) != S_ISDIR(mode))
+			return;
 		i_uid_write(inode, (uid_t)le32_to_cpu(value[0]));
 		i_gid_write(inode, (gid_t)le32_to_cpu(value[1]));
-		inode->i_mode = le32_to_cpu(value[2]);
+		inode->i_mode = mode;
 
 		if (ntfs_get_ea(inode, "$LXDEV", sizeof("$LXDEV") - 1,
 				&value[0], sizeof(value),

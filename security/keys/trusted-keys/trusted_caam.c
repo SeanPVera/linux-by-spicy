@@ -110,7 +110,7 @@ static int trusted_caam_seal(struct trusted_key_payload *p, char *datablob)
 		info.pkey_info.is_pkey = 1;
 		ret = get_pkey_options(datablob, &info.pkey_info);
 		if (ret < 0)
-			return 0;
+			return ret;
 		dump_options(&info.pkey_info);
 	}
 
@@ -120,6 +120,8 @@ static int trusted_caam_seal(struct trusted_key_payload *p, char *datablob)
 
 	p->blob_len = info.output_len;
 	if (info.pkey_info.is_pkey) {
+		if (p->blob_len > MAX_KEY_SIZE - sizeof(struct caam_pkey_info))
+			return -EINVAL;
 		p->key_len = p->blob_len + sizeof(struct caam_pkey_info);
 		memcpy(p->key, &info.pkey_info, sizeof(struct caam_pkey_info));
 		memcpy(p->key + sizeof(struct caam_pkey_info), p->blob, p->blob_len);
@@ -138,11 +140,14 @@ static int trusted_caam_unseal(struct trusted_key_payload *p, char *datablob)
 	};
 
 	if (is_key_pkey(&datablob)) {
+		if (p->blob_len <= CAAM_BLOB_OVERHEAD ||
+		    p->blob_len > MAX_KEY_SIZE - sizeof(struct caam_pkey_info))
+			return -EINVAL;
 		info.pkey_info.plain_key_sz = p->blob_len - CAAM_BLOB_OVERHEAD;
 		info.pkey_info.is_pkey = 1;
 		ret = get_pkey_options(datablob, &info.pkey_info);
 		if (ret < 0)
-			return 0;
+			return ret;
 		dump_options(&info.pkey_info);
 
 		p->key_len = p->blob_len + sizeof(struct caam_pkey_info);

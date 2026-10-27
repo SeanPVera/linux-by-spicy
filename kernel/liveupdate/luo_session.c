@@ -245,7 +245,8 @@ static int luo_session_release(struct inode *inodep, struct file *filep)
 		if (err) {
 			pr_warn("Unable to finish session [%s] on release\n",
 				session->name);
-			return err;
+			scoped_guard(mutex, &session->mutex)
+				luo_file_unpreserve_files(&session->file_set);
 		}
 		sh = &luo_session_global.incoming;
 	} else {

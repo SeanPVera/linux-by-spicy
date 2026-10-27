@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import select
 import shutil
+import stat
 import subprocess
 import tempfile
 import time
@@ -204,8 +205,9 @@ def main():
             # cleanup run as the checkout owner on the shared artifact tree.
             owner = ROOT.stat()
             for path in (OUTPUT.parent, OUTPUT, *OUTPUT.rglob("*")):
-                if not path.is_symlink():
-                    os.chown(path, owner.st_uid, owner.st_gid)
+                st = path.lstat()
+                if not stat.S_ISLNK(st.st_mode) and (stat.S_ISDIR(st.st_mode) or st.st_nlink == 1):
+                    os.chown(path, owner.st_uid, owner.st_gid, follow_symlinks=False)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,62 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+# Resolve a fresh Debian ARM64 desktop using metadata only; install nothing.
+set -eu
+repo="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)"
+packages="${1:-$repo/distro/dist}"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT HUP INT TERM
+chmod 755 "$work"
+mkdir -p "$work/state/lists/partial" "$work/cache/archives/partial"
+touch "$work/status"
+cat > "$work/sources.list" <<'EOF'
+deb http://deb.debian.org/debian trixie main
+deb http://deb.debian.org/debian trixie-updates main
+deb http://deb.debian.org/debian-security trixie-security main
+EOF
+cat > "$work/apt.conf" <<EOF
+APT::Architecture "arm64";
+APT::Architectures { "arm64"; };
+Dir::State "$work/state";
+Dir::State::status "$work/status";
+Dir::Cache "$work/cache";
+Dir::Etc::sourcelist "$work/sources.list";
+Dir::Etc::sourceparts "-";
+EOF
+apt-get -c "$work/apt.conf" update
+version="$(cat "$packages/spicy-package-version")"
+output="$repo/distro/build/previews/arm64-dependency-plan.txt"
+mkdir -p "$(dirname "$output")"
+apt-get -c "$work/apt.conf" --simulate --no-remove install \
+    "$packages/spicy-artwork_${version}_all.deb" \
+    "$packages/spicy-desktop_${version}_all.deb" > "$output"
+build_output="$repo/distro/build/previews/arm64-build-dependency-plan.txt"
+apt-get -c "$work/apt.conf" --simulate --no-remove install \
+    git ca-certificates dpkg-dev python3-cairosvg python3-pil x11-apps > "$build_output"
+python3 - "$output" "$build_output" <<'PY'
+from pathlib import Path
+import re
+import sys
+plan = Path(sys.argv[1]).read_text()
+installs = [line for line in plan.splitlines() if line.startswith('Inst ')]
+assert installs, 'No dependency solution was recorded'
+for line in installs:
+    assert re.search(r'\[(arm64|all)\]\)', line), line
+# qt6-style-kvantum is an Architecture: all transition package in trixie;
+# qt-style-kvantum supplies the actual native plugin.
+for name in ['python3', 'plasma-workspace', 'kwin-wayland', 'qt-style-kvantum', 'kde-spectacle', 'konsole']:
+    assert any(re.match(r'Inst ' + re.escape(name) + r'(?::arm64)? ', line)
+               and '[arm64]' in line for line in installs), name
+assert 'Remv ' not in plan
+print(f'Debian ARM64 dependency solution passed: {len(installs)} packages; no installation or ARM runtime test performed.')
+build = Path(sys.argv[2]).read_text()
+build_installs = [line for line in build.splitlines() if line.startswith('Inst ')]
+assert build_installs
+for line in build_installs:
+    assert re.search(r'\[(arm64|all)\]\)', line), line
+for name in ['git', 'python3-pil', 'x11-apps']:
+    assert any(re.match(r'Inst ' + re.escape(name) + r'(?::arm64)? ', line)
+               and '[arm64]' in line for line in build_installs), name
+assert 'Remv ' not in build
+print(f'Debian ARM64 source-build tools resolved: {len(build_installs)} packages; no installation or ARM compilation performed.')
+PY

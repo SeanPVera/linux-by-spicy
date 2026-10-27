@@ -786,6 +786,11 @@ static int snd_emu10k1_verify_controls(struct snd_emu10k1 *emu,
 			err = -EFAULT;
 			goto __error;
 		}
+		if (gctl->vcount == 0 || gctl->vcount > 32 ||
+		    gctl->count == 0 || gctl->count > 32) {
+			err = -EINVAL;
+			goto __error;
+		}
 		if (snd_emu10k1_look_for_ctl(emu, &gctl->id))
 			continue;
 		gctl_id = (struct snd_ctl_elem_id *)&gctl->id;
@@ -878,6 +883,11 @@ static int snd_emu10k1_add_controls(struct snd_emu10k1 *emu,
 			err = -EFAULT;
 			goto __error;
 		}
+		if (gctl->vcount == 0 || gctl->vcount > 32 ||
+		    gctl->count == 0 || gctl->count > 32) {
+			err = -EINVAL;
+			goto __error;
+		}
 		gctl_id = (struct snd_ctl_elem_id *)&gctl->id;
 		if (gctl_id->iface != SNDRV_CTL_ELEM_IFACE_MIXER &&
 		    gctl_id->iface != SNDRV_CTL_ELEM_IFACE_PCM) {
@@ -934,6 +944,7 @@ static int snd_emu10k1_add_controls(struct snd_emu10k1 *emu,
 			list_add_tail(&ctl->list, &emu->fx8010.gpr_ctl);
 		} else {
 			/* overwrite */
+			kfree(knew.tlv.p);
 			nctl->list = ctl->list;
 			nctl->kcontrol = ctl->kcontrol;
 			*ctl = *nctl;
@@ -1098,6 +1109,10 @@ static int snd_emu10k1_ipcm_poke(struct snd_emu10k1 *emu,
 	} else {
 		/* FIXME: we need to add universal code to the PCM transfer routine */
 		if (ipcm->channels != 2)
+			return -EINVAL;
+		if (ipcm->buffer_size < (14 + 1) * 2 ||
+		    !emu->fx8010.etram_pages.area ||
+		    ipcm->buffer_size > emu->fx8010.etram_pages.bytes / 2)
 			return -EINVAL;
 		pcm->valid = 1;
 		pcm->opened = 0;
@@ -2379,6 +2394,17 @@ int snd_emu10k1_fx8010_tone_control_deactivate(struct snd_emu10k1 *emu, int outp
 int snd_emu10k1_fx8010_tram_setup(struct snd_emu10k1 *emu, u32 size)
 {
 	u8 size_reg = 0;
+	int i;
+
+	if (size > 0x100000)
+		return -EINVAL;
+
+	scoped_guard(spinlock_irq, &emu->reg_lock) {
+		for (i = 0; i < 8; i++) {
+			if (emu->fx8010.pcm[i].opened || emu->fx8010.pcm[i].valid)
+				return -EBUSY;
+		}
+	}
 
 	/* size is in samples */
 	if (size != 0) {
@@ -2502,6 +2528,8 @@ static int snd_emu10k1_fx8010_ioctl(struct snd_hwdep * hw, struct file *file, un
 		kfree(icode);
 		return res;
 	case SNDRV_EMU10K1_IOCTL_PCM_POKE:
+		if (!capable(CAP_SYS_ADMIN))
+			return -EPERM;
 		ipcm = memdup_user(argp, sizeof(*ipcm));
 		if (IS_ERR(ipcm))
 			return PTR_ERR(ipcm);

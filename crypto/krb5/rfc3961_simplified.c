@@ -72,6 +72,7 @@
 #include <linux/slab.h>
 #include <linux/lcm.h>
 #include <linux/rtnetlink.h>
+#include <crypto/algapi.h>
 #include <crypto/authenc.h>
 #include <crypto/skcipher.h>
 #include <crypto/hash.h>
@@ -311,7 +312,9 @@ static int rfc3961_calc_DK(const struct krb5_enctype *krb5,
 	/* loop encrypting the blocks until enough key bytes are generated */
 	n = 0;
 	while (n < rawkey.len) {
-		rfc3961_do_encrypt(cipher, NULL, &inblock, &outblock);
+		ret = rfc3961_do_encrypt(cipher, NULL, &inblock, &outblock);
+		if (ret < 0)
+			goto err_free_inblock;
 
 		if (keybytes - n <= outblock.len) {
 			memcpy(rawkey.data + n, outblock.data, keybytes - n);
@@ -332,6 +335,7 @@ static int rfc3961_calc_DK(const struct krb5_enctype *krb5,
 		ret = krb5->random_to_key(krb5, &rawkey, result);
 	}
 
+err_free_inblock:
 	kfree_sensitive(inblock.data);
 err_free_cipher:
 	crypto_free_sync_skcipher(cipher);
@@ -399,13 +403,13 @@ static int rfc3961_calc_PRF(const struct krb5_enctype *krb5,
 		return -EINVAL;
 
 	tmp1.len = krb5->hash_len;
+	tmp1.data = NULL;
 	derived_key.len = krb5->key_bytes;
-	buffer = kzalloc(round16(tmp1.len) + round16(derived_key.len), gfp);
+	buffer = kzalloc(round16(derived_key.len), gfp);
 	if (!buffer)
 		return -ENOMEM;
 
-	tmp1.data = buffer;
-	derived_key.data = buffer + round16(tmp1.len);
+	derived_key.data = buffer;
 
 	ret = rfc3961_calc_H(krb5, octet_string, &tmp1, gfp);
 	if (ret < 0)
@@ -421,6 +425,7 @@ static int rfc3961_calc_PRF(const struct krb5_enctype *krb5,
 	ret = rfc3961_calc_E(krb5, &derived_key, &tmp2, result, gfp);
 
 err:
+	kfree_sensitive(tmp1.data);
 	kfree_sensitive(buffer);
 	return ret;
 }
@@ -755,15 +760,19 @@ int rfc3961_verify_mic(const struct krb5_enctype *krb5,
 			goto error;
 	}
 
-	crypto_shash_update_sg(desc, sg, data_offset, data_len);
-	crypto_shash_final(desc, cksum);
+	ret = crypto_shash_update_sg(desc, sg, data_offset, data_len);
+	if (ret < 0)
+		goto error;
+	ret = crypto_shash_final(desc, cksum);
+	if (ret < 0)
+		goto error;
 
 	ret = -EFAULT;
 	done = sg_pcopy_to_buffer(sg, nr_sg, cksum2, krb5->cksum_len, offset);
 	if (done != krb5->cksum_len)
 		goto error;
 
-	if (memcmp(cksum, cksum2, krb5->cksum_len) != 0) {
+	if (crypto_memneq(cksum, cksum2, krb5->cksum_len) != 0) {
 		ret = -EBADMSG;
 		goto error;
 	}

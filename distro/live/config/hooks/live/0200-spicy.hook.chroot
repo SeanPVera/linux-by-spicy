@@ -1,5 +1,7 @@
 #!/bin/sh
 set -eu
+# Guard that this chroot hook only executes on ephemeral live-session media.
+test -f /etc/spicy/live-image
 # live-config only creates the session account when this package is present.
 test -x /usr/lib/user-setup/user-setup-apply
 plymouth-set-default-theme spicy

@@ -203,10 +203,12 @@ static int io_register_restrictions_task(void __user *arg, unsigned int nr_args)
 	struct io_uring_task_restriction __user *ures = arg;
 	struct io_uring_task_restriction tres;
 	struct io_restriction *res;
+	bool allocated = false;
 	int ret;
 
 	/* Disallow if task already has registered restrictions */
-	if (current->io_uring_restrict)
+	if (current->io_uring_restrict &&
+	    current->io_uring_restrict->reg_registered)
 		return -EPERM;
 	/*
 	 * Similar to seccomp, disallow setting a filter if task_no_new_privs
@@ -226,13 +228,22 @@ static int io_register_restrictions_task(void __user *arg, unsigned int nr_args)
 	if (!mem_is_zero(tres.resv, sizeof(tres.resv)))
 		return -EINVAL;
 
-	res = kzalloc_obj(*res, GFP_KERNEL_ACCOUNT);
-	if (!res)
-		return -ENOMEM;
+	res = current->io_uring_restrict;
+	if (!res) {
+		res = kzalloc_obj(*res, GFP_KERNEL_ACCOUNT);
+		if (!res)
+			return -ENOMEM;
+		allocated = true;
+	}
 
 	ret = io_parse_restrictions(ures->restrictions, tres.nr_res, res);
 	if (ret < 0) {
-		kfree(res);
+		if (allocated)
+			kfree(res);
+		else
+			memset(&res->register_op, 0,
+			       offsetof(struct io_restriction, bpf_filters_cow) -
+			       offsetof(struct io_restriction, register_op));
 		return ret;
 	}
 	current->io_uring_restrict = res;
@@ -988,10 +999,14 @@ static int __io_uring_register(struct io_ring_ctx *ctx, unsigned opcode,
 
 static int io_uring_register_send_msg_ring(void __user *arg, unsigned int nr_args)
 {
+	struct io_restriction *res = current->io_uring_restrict;
 	struct io_uring_sqe sqe;
 
 	if (!arg || nr_args != 1)
 		return -EINVAL;
+	if (res && res->op_registered &&
+	    !test_bit(IORING_OP_MSG_RING, res->sqe_op))
+		return -EACCES;
 	if (copy_from_user(&sqe, arg, sizeof(sqe)))
 		return -EFAULT;
 	/* no flags supported */
@@ -1010,6 +1025,13 @@ static int io_uring_register_send_msg_ring(void __user *arg, unsigned int nr_arg
 static int io_uring_register_blind(unsigned int opcode, void __user *arg,
 				   unsigned int nr_args)
 {
+	struct io_restriction *res = current->io_uring_restrict;
+
+	if (opcode >= IORING_REGISTER_LAST)
+		return -EINVAL;
+	if (res && res->reg_registered && !test_bit(opcode, res->register_op))
+		return -EACCES;
+
 	switch (opcode) {
 	case IORING_REGISTER_SEND_MSG_RING:
 		return io_uring_register_send_msg_ring(arg, nr_args);

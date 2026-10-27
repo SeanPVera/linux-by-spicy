@@ -448,10 +448,18 @@ struct acrn_ioreq_client *acrn_ioreq_client_create(struct acrn_vm *vm,
 	}
 
 	spin_lock_bh(&vm->ioreq_clients_lock);
-	if (is_default)
+	if (is_default) {
+		if (vm->default_client) {
+			spin_unlock_bh(&vm->ioreq_clients_lock);
+			if (client->thread)
+				kthread_stop(client->thread);
+			kfree(client);
+			return NULL;
+		}
 		vm->default_client = client;
-	else
+	} else {
 		list_add(&client->list, &vm->ioreq_clients);
+	}
 	spin_unlock_bh(&vm->ioreq_clients_lock);
 
 	dev_dbg(acrn_dev.this_device, "Created ioreq client %s.\n", name);

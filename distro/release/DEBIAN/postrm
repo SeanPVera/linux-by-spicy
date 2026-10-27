@@ -4,7 +4,7 @@ case "$1" in
     remove|purge|abort-install)
         if [ "$(dpkg-divert --listpackage /etc/os-release)" = spicy-release ]; then
             if [ "$(readlink /etc/os-release 2>/dev/null || true)" = /usr/lib/spicy/os-release ]; then
-                rm /etc/os-release
+                rm -f /etc/os-release
             fi
             if [ ! -e /etc/os-release ] && [ ! -L /etc/os-release ]; then
                 dpkg-divert --package spicy-release --remove --rename --divert /etc/os-release.debian /etc/os-release

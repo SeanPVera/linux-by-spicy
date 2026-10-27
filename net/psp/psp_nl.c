@@ -781,7 +781,7 @@ int psp_nl_rx_assoc_doit(struct sk_buff *skb, struct genl_info *info)
 		return -EINVAL;
 
 	version = nla_get_u32(info->attrs[PSP_A_ASSOC_VERSION]);
-	if (!(psd->caps->versions & (1 << version))) {
+	if (version >= 32 || !(psd->caps->versions & BIT(version))) {
 		NL_SET_BAD_ATTR(info->extack, info->attrs[PSP_A_ASSOC_VERSION]);
 		return -EOPNOTSUPP;
 	}
@@ -838,7 +838,7 @@ int psp_nl_tx_assoc_doit(struct sk_buff *skb, struct genl_info *info)
 		return -EINVAL;
 
 	version = nla_get_u32(info->attrs[PSP_A_ASSOC_VERSION]);
-	if (!(psd->caps->versions & (1 << version))) {
+	if (version >= 32 || !(psd->caps->versions & BIT(version))) {
 		NL_SET_BAD_ATTR(info->extack, info->attrs[PSP_A_ASSOC_VERSION]);
 		return -EOPNOTSUPP;
 	}

@@ -142,10 +142,12 @@ static int krb5enc_dispatch_encrypt(struct aead_request *req,
 	struct scatterlist *src, *dst;
 
 	src = scatterwalk_ffwd(areq_ctx->src, req->src, req->assoclen);
-	if (req->src == req->dst)
+	if (req->src == req->dst) {
 		dst = src;
-	else
+	} else {
+		memcpy_sglist(req->dst, req->src, req->assoclen);
 		dst = scatterwalk_ffwd(areq_ctx->dst, req->dst, req->assoclen);
+	}
 
 	skcipher_request_set_tfm(skreq, enc);
 	skcipher_request_set_callback(skreq, flags,
@@ -242,15 +244,14 @@ static int krb5enc_encrypt(struct aead_request *req)
 static int krb5enc_verify_hash(struct aead_request *req)
 {
 	struct crypto_aead *krb5enc = crypto_aead_reqtfm(req);
-	struct aead_instance *inst = aead_alg_instance(krb5enc);
-	struct krb5enc_instance_ctx *ictx = aead_instance_ctx(inst);
 	struct krb5enc_request_ctx *areq_ctx = aead_request_ctx(req);
-	struct ahash_request *ahreq = (void *)(areq_ctx->tail + ictx->reqoff);
 	unsigned int authsize = crypto_aead_authsize(krb5enc);
 	u8 *calc_hash = areq_ctx->tail;
 	u8 *msg_hash  = areq_ctx->tail + authsize;
 
-	scatterwalk_map_and_copy(msg_hash, req->src, ahreq->nbytes, authsize, 0);
+	scatterwalk_map_and_copy(msg_hash, req->src,
+				 req->assoclen + req->cryptlen - authsize,
+				 authsize, 0);
 
 	if (crypto_memneq(msg_hash, calc_hash, authsize))
 		return -EBADMSG;
@@ -329,8 +330,10 @@ static int krb5enc_dispatch_decrypt(struct aead_request *req)
 	src = scatterwalk_ffwd(areq_ctx->src, req->src, req->assoclen);
 	dst = src;
 
-	if (req->src != req->dst)
+	if (req->src != req->dst) {
+		memcpy_sglist(req->dst, req->src, req->assoclen);
 		dst = scatterwalk_ffwd(areq_ctx->dst, req->dst, req->assoclen);
+	}
 
 	skcipher_request_set_tfm(skreq, ctx->enc);
 	skcipher_request_set_callback(skreq, aead_request_flags(req),

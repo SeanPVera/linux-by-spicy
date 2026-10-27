@@ -27,10 +27,11 @@ struct dump_ctx {
 
 static int __em_nl_get_pd_size(struct em_perf_domain *pd, void *data)
 {
-	int nr_cpus, msg_sz, cpus_sz;
+	int nr_cpus = 0, msg_sz, cpus_sz;
 	int *tot_msg_sz = data;
 
-	nr_cpus = cpumask_weight(to_cpumask(pd->cpus));
+	if (pd->is_cpu_device)
+		nr_cpus = cpumask_weight(to_cpumask(pd->cpus));
 	cpus_sz = nla_total_size_64bit(sizeof(u64)) * nr_cpus;
 
 	msg_sz = nla_total_size(0) +
@@ -60,11 +61,15 @@ static int __em_nl_get_pd(struct em_perf_domain *pd, void *data)
 			      pd->flags, DEV_ENERGYMODEL_A_PERF_DOMAIN_PAD))
 		goto out_cancel_nest;
 
-	cpumask = to_cpumask(pd->cpus);
-	for_each_cpu(cpu, cpumask) {
-		if (nla_put_u64_64bit(msg, DEV_ENERGYMODEL_A_PERF_DOMAIN_CPUS,
-				      cpu, DEV_ENERGYMODEL_A_PERF_DOMAIN_PAD))
-			goto out_cancel_nest;
+	if (pd->is_cpu_device) {
+		cpumask = to_cpumask(pd->cpus);
+		for_each_cpu(cpu, cpumask) {
+			if (nla_put_u64_64bit(msg,
+					      DEV_ENERGYMODEL_A_PERF_DOMAIN_CPUS,
+					      cpu,
+					      DEV_ENERGYMODEL_A_PERF_DOMAIN_PAD))
+				goto out_cancel_nest;
+		}
 	}
 
 	return 0;
@@ -86,31 +91,27 @@ static int __em_nl_get_pd_for_dump(struct em_perf_domain *pd, void *data)
 	info = genl_info_dump(ctx->cb);
 	hdr = genlmsg_iput(ctx->skb, info);
 	if (!hdr) {
-		genlmsg_cancel(ctx->skb, hdr);
+		ctx->idx--;
 		return -EMSGSIZE;
 	}
 
 	ret = __em_nl_get_pd(pd, ctx->skb);
+	if (ret) {
+		genlmsg_cancel(ctx->skb, hdr);
+		ctx->idx--;
+		return ret;
+	}
 	genlmsg_end(ctx->skb, hdr);
-	return ret;
+	return 0;
 }
 
-int dev_energymodel_nl_get_perf_domains_doit(struct sk_buff *skb,
-					      struct genl_info *info)
+static int __em_nl_doit_pd(struct em_perf_domain *pd, void *data)
 {
-	int id, ret = -EMSGSIZE, msg_sz = 0;
+	struct genl_info *info = data;
 	int cmd = info->genlhdr->cmd;
-	struct em_perf_domain *pd;
+	int ret = -EMSGSIZE, msg_sz = 0;
 	struct sk_buff *msg;
 	void *hdr;
-
-	if (!info->attrs[DEV_ENERGYMODEL_A_PERF_DOMAIN_PERF_DOMAIN_ID])
-		return -EINVAL;
-
-	id = nla_get_u32(info->attrs[DEV_ENERGYMODEL_A_PERF_DOMAIN_PERF_DOMAIN_ID]);
-	pd = em_perf_domain_get_by_id(id);
-	if (!pd)
-		return -EINVAL;
 
 	__em_nl_get_pd_size(pd, &msg_sz);
 	msg = genlmsg_new(msg_sz, GFP_KERNEL);
@@ -135,9 +136,22 @@ out_free_msg:
 	return ret;
 }
 
+int dev_energymodel_nl_get_perf_domains_doit(struct sk_buff *skb,
+					      struct genl_info *info)
+{
+	int id;
+
+	if (!info->attrs[DEV_ENERGYMODEL_A_PERF_DOMAIN_PERF_DOMAIN_ID])
+		return -EINVAL;
+
+	id = nla_get_u32(info->attrs[DEV_ENERGYMODEL_A_PERF_DOMAIN_PERF_DOMAIN_ID]);
+	return em_perf_domain_by_id(id, __em_nl_doit_pd, info);
+}
+
 int dev_energymodel_nl_get_perf_domains_dumpit(struct sk_buff *skb,
 						struct netlink_callback *cb)
 {
+	int ret;
 	struct dump_ctx ctx = {
 		.idx = 0,
 		.start = cb->args[0],
@@ -145,20 +159,9 @@ int dev_energymodel_nl_get_perf_domains_dumpit(struct sk_buff *skb,
 		.cb = cb,
 	};
 
-	return for_each_em_perf_domain(__em_nl_get_pd_for_dump, &ctx);
-}
-
-static struct em_perf_domain *__em_nl_get_pd_table_id(struct nlattr **attrs)
-{
-	struct em_perf_domain *pd;
-	int id;
-
-	if (!attrs[DEV_ENERGYMODEL_A_PERF_TABLE_PERF_DOMAIN_ID])
-		return NULL;
-
-	id = nla_get_u32(attrs[DEV_ENERGYMODEL_A_PERF_TABLE_PERF_DOMAIN_ID]);
-	pd = em_perf_domain_get_by_id(id);
-	return pd;
+	ret = for_each_em_perf_domain(__em_nl_get_pd_for_dump, &ctx);
+	cb->args[0] = ctx.idx;
+	return ret;
 }
 
 static int __em_nl_get_pd_table_size(const struct em_perf_domain *pd)
@@ -245,18 +248,13 @@ out_err:
 	return -EMSGSIZE;
 }
 
-int dev_energymodel_nl_get_perf_table_doit(struct sk_buff *skb,
-					    struct genl_info *info)
+static int __em_nl_doit_pd_table(struct em_perf_domain *pd, void *data)
 {
+	struct genl_info *info = data;
 	int cmd = info->genlhdr->cmd;
 	int msg_sz, ret = -EMSGSIZE;
-	struct em_perf_domain *pd;
 	struct sk_buff *msg;
 	void *hdr;
-
-	pd = __em_nl_get_pd_table_id(info->attrs);
-	if (!pd)
-		return -EINVAL;
 
 	msg_sz = __em_nl_get_pd_table_size(pd);
 
@@ -278,6 +276,18 @@ int dev_energymodel_nl_get_perf_table_doit(struct sk_buff *skb,
 out_free_msg:
 	nlmsg_free(msg);
 	return ret;
+}
+
+int dev_energymodel_nl_get_perf_table_doit(struct sk_buff *skb,
+					    struct genl_info *info)
+{
+	int id;
+
+	if (!info->attrs[DEV_ENERGYMODEL_A_PERF_TABLE_PERF_DOMAIN_ID])
+		return -EINVAL;
+
+	id = nla_get_u32(info->attrs[DEV_ENERGYMODEL_A_PERF_TABLE_PERF_DOMAIN_ID]);
+	return em_perf_domain_by_id(id, __em_nl_doit_pd_table, info);
 }
 
 

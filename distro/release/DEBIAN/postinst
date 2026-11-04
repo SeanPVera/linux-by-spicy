@@ -8,8 +8,11 @@ if [ "$1" = configure ]; then
     fi
     if [ -z "$owner" ]; then
         dpkg-divert --package spicy-release --add --rename --divert /etc/os-release.debian /etc/os-release
+        # Force-replace any pre-existing path with our symlink (-s -n -f).
         ln -snf /usr/lib/spicy/os-release /etc/os-release
     elif [ ! -e /etc/os-release ] || [ "$(readlink /etc/os-release 2>/dev/null || true)" = /usr/lib/spicy/os-release ]; then
+        # Diversion already ours: recreate the symlink if missing, or refresh
+        # it in place when it already points at our target (idempotent).
         ln -snf /usr/lib/spicy/os-release /etc/os-release
     fi
 fi

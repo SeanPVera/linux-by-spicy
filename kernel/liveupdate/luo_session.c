@@ -238,7 +238,13 @@ static int luo_session_release(struct inode *inodep, struct file *filep)
 	struct luo_session_header *sh;
 
 	guard(rwsem_read)(&luo_session_serialize_rwsem);
-	/* If retrieved is set, it means this session is from incoming list */
+	/*
+	 * Incoming sessions must finish during release. If finish fails we still
+	 * unpreserve and free: the fd is going away, so leaving preserved files
+	 * pinned would leak references. The LIVEUPDATE_SESSION_FINISH ioctl
+	 * path deliberately leaves files preserved on error so userspace can retry;
+	 * that retry is impossible once release has run.
+	 */
 	if (session->retrieved) {
 		int err = luo_session_finish_one(session);
 

@@ -1050,7 +1050,8 @@ void ntfs_get_wsl_perm(struct inode *inode)
 			sizeof(value[2]), &sz) == sizeof(value[2])) {
 		umode_t mode = le32_to_cpu(value[2]);
 
-		if (S_ISDIR(inode->i_mode) != S_ISDIR(mode))
+		/* Reject any file-type mismatch, not only directory vs non-directory. */
+		if ((inode->i_mode & S_IFMT) != (mode & S_IFMT))
 			return;
 		i_uid_write(inode, (uid_t)le32_to_cpu(value[0]));
 		i_gid_write(inode, (gid_t)le32_to_cpu(value[1]));

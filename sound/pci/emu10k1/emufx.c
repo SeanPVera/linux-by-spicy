@@ -2457,7 +2457,8 @@ int snd_emu10k1_fx8010_tram_setup(struct snd_emu10k1 *emu, u32 size)
 
 	scoped_guard(spinlock_irq, &emu->reg_lock) {
 		for (i = 0; i < 8; i++) {
-			if (emu->fx8010.pcm[i].opened || emu->fx8010.pcm[i].valid)
+			/* Block only while a PCM stream is open; ld10k1 reconfigures TRAM with valid=1. */
+			if (emu->fx8010.pcm[i].opened)
 				return -EBUSY;
 		}
 	}

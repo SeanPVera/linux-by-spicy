@@ -904,9 +904,9 @@ static void snd_emu10k1_free(struct snd_card *card)
 	struct snd_emu10k1 *emu = card->private_data;
 
 	if (emu->port) {	/* avoid access to already used hardware */
+		snd_emu10k1_free_efx(emu);
 		snd_emu10k1_fx8010_tram_setup(emu, 0);
 		snd_emu10k1_done(emu);
-		snd_emu10k1_free_efx(emu);
 	}
 	if (emu->card_capabilities->emu_model == EMU_MODEL_EMU1010) {
 		/* Disable 48Volt power to Audio Dock */

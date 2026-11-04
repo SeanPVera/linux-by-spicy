@@ -82,7 +82,7 @@ int acrn_vm_destroy(struct acrn_vm *vm)
 	acrn_ioreq_deinit(vm);
 
 	if (vm->monitor_page) {
-		put_page(vm->monitor_page);
+		unpin_user_page(vm->monitor_page);
 		vm->monitor_page = NULL;
 	}
 

@@ -165,3 +165,10 @@ def test_stalled_tools_return_and_release_their_child_processes(appearance, monk
         with pytest.raises(ProcessLookupError):
             os.kill(child.pid, 0)
 
+
+def test_commands_rejects_unsupported_theme(appearance):
+    script, _log = appearance
+    with pytest.raises(ValueError, match="Unsupported theme"):
+        script.commands("invalid-theme")
+
+

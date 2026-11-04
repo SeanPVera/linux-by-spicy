@@ -17,6 +17,8 @@ SAVED_REFRESH_PENDING = 2
 
 
 def commands(theme=None, reduced=None):
+    if theme is not None and theme not in ("daylight", "night-prowl"):
+        raise ValueError(f"Unsupported theme: {theme!r}")
     result = []
     refresh = []
     def config(file, groups, key, value):

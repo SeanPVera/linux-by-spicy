@@ -306,6 +306,9 @@ int psp_dev_rcv(struct sk_buff *skb, u16 dev_id, u8 generation, bool strip_icv)
 	__be16 proto;
 	bool is_udp;
 
+	if (unlikely(!pskb_may_pull(skb, sizeof(struct ethhdr))))
+		return -EINVAL;
+
 	eth = (struct ethhdr *)skb->data;
 	proto = __vlan_get_protocol(skb, eth->h_proto, &l2_hlen);
 	if (proto == htons(ETH_P_IP))

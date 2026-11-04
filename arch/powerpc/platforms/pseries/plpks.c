@@ -1034,6 +1034,9 @@ int plpks_wrap_object(u8 **input_buf, u32 input_len, u16 wrap_flags,
 		.component = PLPKS_WRAPKEY_COMPONENT
 	};
 
+	*output_buf = NULL;
+	*output_len = 0;
+
 	auth = construct_auth(PLPKS_OS_OWNER);
 	if (IS_ERR(auth))
 		return PTR_ERR(auth);
@@ -1088,6 +1091,10 @@ int plpks_wrap_object(u8 **input_buf, u32 input_len, u16 wrap_flags,
 		       pseries_status, rc);
 		kfree(*output_buf);
 		*output_buf = NULL;
+	} else if (retbuf[1] > *output_len) {
+		kfree(*output_buf);
+		*output_buf = NULL;
+		rc = -EIO;
 	} else {
 		*output_len = retbuf[1];
 	}
@@ -1144,6 +1151,12 @@ int plpks_unwrap_object(u8 **input_buf, u32 input_len, u8 **output_buf,
 	u64 objwrapflags = 0;
 	int rc = 0, pseries_status = 0;
 
+	*output_buf = NULL;
+	*output_len = 0;
+
+	if (input_len <= PLPKS_WRAPPING_BUF_DIFF)
+		return -EINVAL;
+
 	auth = construct_auth(PLPKS_OS_OWNER);
 	if (IS_ERR(auth))
 		return PTR_ERR(auth);
@@ -1174,6 +1187,10 @@ int plpks_unwrap_object(u8 **input_buf, u32 input_len, u8 **output_buf,
 		       pseries_status, rc);
 		kfree(*output_buf);
 		*output_buf = NULL;
+	} else if (retbuf[1] > *output_len) {
+		kfree(*output_buf);
+		*output_buf = NULL;
+		rc = -EIO;
 	} else {
 		*output_len = retbuf[1];
 	}

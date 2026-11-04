@@ -1655,6 +1655,10 @@ static int snd_emu10k1_fx8010_playback_prepare(struct snd_pcm_substream *substre
 	       runtime->buffer_size, runtime->buffer_size << 2);
 	*/
 	memset(&pcm->pcm_rec, 0, sizeof(pcm->pcm_rec));
+	if (!emu->fx8010.etram_pages.area ||
+	    pcm->buffer_size < (INITIAL_TRAM_SHIFT + 1) * 2 ||
+	    pcm->buffer_size > emu->fx8010.etram_pages.bytes / 2)
+		return -EINVAL;
 	pcm->pcm_rec.hw_buffer_size = pcm->buffer_size * 2; /* byte size */
 	pcm->pcm_rec.sw_buffer_size = snd_pcm_lib_buffer_bytes(substream);
 	pcm->tram_pos = INITIAL_TRAM_POS(pcm->buffer_size);

@@ -17,14 +17,14 @@ static inline char *ndr_get_field(struct ndr *n)
 static int try_to_realloc_ndr_blob(struct ndr *n, size_t sz)
 {
 	char *data;
+	size_t new_len = n->offset + sz + 1024;
 
-	data = krealloc(n->data, n->offset + sz + 1024, KSMBD_DEFAULT_GFP);
+	data = krealloc(n->data, new_len, KSMBD_DEFAULT_GFP | __GFP_ZERO);
 	if (!data)
 		return -ENOMEM;
 
 	n->data = data;
-	n->length += 1024;
-	memset(n->data + n->offset, 0, 1024);
+	n->length = new_len;
 	return 0;
 }
 
@@ -488,7 +488,9 @@ int ndr_decode_v4_ntacl(struct ndr *n, struct xattr_ntacl *acl)
 	if (ret)
 		return ret;
 
-	ndr_read_bytes(n, acl->desc, 10);
+	ret = ndr_read_bytes(n, acl->desc, 10);
+	if (ret)
+		return ret;
 	if (strncmp(acl->desc, "posix_acl", 9)) {
 		pr_err("Invalid acl description : %s\n", acl->desc);
 		return -EINVAL;
@@ -503,6 +505,9 @@ int ndr_decode_v4_ntacl(struct ndr *n, struct xattr_ntacl *acl)
 	ret = ndr_read_bytes(n, acl->posix_acl_hash, XATTR_SD_HASH_SIZE);
 	if (ret)
 		return ret;
+
+	if (n->length <= n->offset)
+		return -EINVAL;
 
 	acl->sd_size = n->length - n->offset;
 	acl->sd_buf = kzalloc(acl->sd_size, KSMBD_DEFAULT_GFP);

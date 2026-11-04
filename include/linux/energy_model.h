@@ -79,6 +79,7 @@ struct em_perf_domain {
 	int min_perf_state;
 	int max_perf_state;
 	unsigned long flags;
+	bool is_cpu_device;
 	unsigned long cpus[];
 };
 

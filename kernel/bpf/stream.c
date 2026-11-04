@@ -79,7 +79,12 @@ static int bpf_stream_push_str(struct bpf_stream *stream, const char *str, int l
 {
 	int ret = bpf_stream_consume_capacity(stream, len);
 
-	return ret ?: __bpf_stream_push_str(&stream->log, str, len);
+	if (ret)
+		return ret;
+	ret = __bpf_stream_push_str(&stream->log, str, len);
+	if (ret)
+		atomic_sub(len, &stream->capacity);
+	return ret;
 }
 
 static struct bpf_stream *bpf_stream_get(enum bpf_stream_id stream_id, struct bpf_prog_aux *aux)
@@ -158,9 +163,12 @@ static int bpf_stream_read(struct bpf_stream *stream, void __user *buf, int len)
 	struct bpf_stream_elem *elem = NULL;
 	struct llist_node *node;
 
+	if (len < 0)
+		return -EINVAL;
+
 	mutex_lock(&stream->lock);
 
-	while (rem_len) {
+	while (rem_len > 0) {
 		int pos = len - rem_len;
 		bool cont;
 

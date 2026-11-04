@@ -437,6 +437,7 @@ static int em_create_pd(struct device *dev, int nr_states,
 		if (!pd)
 			return -ENOMEM;
 
+		pd->is_cpu_device = true;
 		cpumask_copy(em_span_cpus(pd), cpus);
 	} else {
 		pd = kzalloc_obj(*pd);
@@ -1044,5 +1045,21 @@ struct em_perf_domain *em_perf_domain_get_by_id(int id)
 	}
 
 	return NULL;
+}
+
+int em_perf_domain_by_id(int id, int (*cb)(struct em_perf_domain *, void *),
+			 void *data)
+{
+	struct em_perf_domain *pd;
+
+	lockdep_assert_not_held(&em_pd_mutex);
+	guard(mutex)(&em_pd_list_mutex);
+
+	list_for_each_entry(pd, &em_pd_list, node) {
+		if (pd->id == id)
+			return cb(pd, data);
+	}
+
+	return -EINVAL;
 }
 #endif

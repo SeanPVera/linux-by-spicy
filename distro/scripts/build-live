@@ -8,7 +8,8 @@ docker run --rm --privileged \
     --mount "type=bind,src=$repo,dst=/src" \
     -e SPICY_OWNER_UID="$(id -u)" -e SPICY_OWNER_GID="$(id -g)" \
     spicy-builder:alpha sh -eu -c '
-        work=/src/distro/build/live
+        work="$(mktemp -d /tmp/spicy-live.XXXXXX)"
+        trap '\''rm -rf "$work"'\'' EXIT
         sh /src/distro/tools/stage-live-config "$work"
         mkdir -p "$work/config/packages.chroot"
         # Keep earlier archives in dist, but never mix their versions into the
@@ -32,8 +33,8 @@ docker run --rm --privileged \
         if [ "$(chroot chroot dpkg-divert --listpackage /etc/os-release)" = LOCAL ] &&
            [ "$(chroot chroot dpkg-divert --truename /etc/os-release)" = /etc/os-release.debootstrap ]; then
             chroot chroot dpkg-divert --local --remove --no-rename /etc/os-release
-            if [ -e chroot/etc/os-release.debootstrap ] || [ -L chroot/etc/os-release.debootstrap ]; then
-                mv -f chroot/etc/os-release.debootstrap chroot/etc/os-release
+            if [ ! -L chroot/etc ] && { [ -e chroot/etc/os-release.debootstrap ] || [ -L chroot/etc/os-release.debootstrap ]; }; then
+                chroot chroot mv -fT /etc/os-release.debootstrap /etc/os-release
             fi
         fi
         # Continue with the remaining lb build stages directly. Running lb
@@ -43,8 +44,9 @@ docker run --rm --privileged \
         lb installer
         lb binary
         lb source
+        mkdir -p /src/distro/dist
         cp live-image-amd64.hybrid.iso /src/distro/dist/spicy-linux-0.1-alpha-amd64.iso
         cd /src/distro/dist
         sha256sum spicy-linux-0.1-alpha-amd64.iso > spicy-linux-0.1-alpha-amd64.iso.sha256
-        chown "$SPICY_OWNER_UID:$SPICY_OWNER_GID" spicy-linux-0.1-alpha-amd64.iso*
+        chown -h "$SPICY_OWNER_UID:$SPICY_OWNER_GID" spicy-linux-0.1-alpha-amd64.iso spicy-linux-0.1-alpha-amd64.iso.sha256
     '

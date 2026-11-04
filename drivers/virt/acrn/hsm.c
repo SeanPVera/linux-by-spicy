@@ -132,6 +132,9 @@ static long acrn_dev_ioctl(struct file *filp, unsigned int cmd,
 
 	switch (cmd) {
 	case ACRN_IOCTL_CREATE_VM:
+		if (vm->vmid != ACRN_INVALID_VMID)
+			return -EEXIST;
+
 		vm_param = memdup_user((void __user *)ioctl_param,
 				       sizeof(struct acrn_vm_creation));
 		if (IS_ERR(vm_param))
@@ -364,15 +367,22 @@ static long acrn_dev_ioctl(struct file *filp, unsigned int cmd,
 		vm->monitor_page = page;
 		break;
 	case ACRN_IOCTL_CREATE_IOREQ_CLIENT:
-		if (vm->default_client)
+		if (READ_ONCE(vm->default_client))
 			return -EEXIST;
 		if (!acrn_ioreq_client_create(vm, NULL, NULL, true, "acrndm"))
 			ret = -EINVAL;
 		break;
-	case ACRN_IOCTL_DESTROY_IOREQ_CLIENT:
-		if (vm->default_client)
-			acrn_ioreq_client_destroy(vm->default_client);
+	case ACRN_IOCTL_DESTROY_IOREQ_CLIENT: {
+		struct acrn_ioreq_client *client;
+
+		spin_lock_bh(&vm->ioreq_clients_lock);
+		client = vm->default_client;
+		vm->default_client = NULL;
+		spin_unlock_bh(&vm->ioreq_clients_lock);
+		if (client)
+			acrn_ioreq_client_destroy(client);
 		break;
+	}
 	case ACRN_IOCTL_ATTACH_IOREQ_CLIENT:
 		if (vm->default_client)
 			ret = acrn_ioreq_client_wait(vm->default_client);
